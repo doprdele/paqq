@@ -9,7 +9,7 @@
 
 ## Features 
 
--  **Multi-Carrier Support**
+###  **Multi-Carrier Support**
   - DHL
   - La Poste
   - Colissimo
@@ -19,25 +19,25 @@
   - FedEx
   - Add your own !
   
--  **Easy Tracking**
+###  **Easy Tracking**
   - Detailed event history
   - Location tracking
   
--  **Modern (and beautiful) UI**
+###  **Modern (and beautiful) UI**
   - Dark/Light mode
   - Responsive design
   - Clean interface
   
--  **Package Sharing**
+###  **Package Sharing**
   - Generate share links
   - Import packages from links
   
--  **Local Storage**
+###  **Local Storage**
   - Offline access
   - No account needed
   - Data persistence
 
--  **Progressive Web App support**
+###  **Progressive Web App support**
   - Easy install
   - Native-like experience
 
@@ -116,5 +116,5 @@ Please read the license carefully before using this software. If you have any qu
 ---
 
 <div align="center">
-  Built with  and  by Paylicier
+  Built with ❤️ and 🌊 by Paylicier
 </div>

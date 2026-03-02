@@ -8,9 +8,11 @@ type RuntimeEnv = Record<string, string | undefined>;
 interface WatchedTarget {
   source: string;
   params: Record<string, string>;
+  friendlyName?: string;
   createdAt: string;
   updatedAt: string;
   nextRunAt: number;
+  deliveredAt?: string;
   lastCheckedAt?: string;
   lastSuccessAt?: string;
   lastError?: string;
@@ -32,6 +34,23 @@ export interface SchedulerStatus {
   lastRunStartedAt?: string;
   lastRunCompletedAt?: string;
   nextRunAt?: string;
+}
+
+export interface WatchedTargetView {
+  key: string;
+  source: string;
+  params: Record<string, string>;
+  friendlyName?: string;
+  createdAt: string;
+  updatedAt: string;
+  nextRunAt?: string;
+  deliveredAt?: string;
+  isDelivered: boolean;
+  lastCheckedAt?: string;
+  lastSuccessAt?: string;
+  lastError?: string;
+  consecutiveFailures: number;
+  lastResult?: ShipmentInfo;
 }
 
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
@@ -85,6 +104,17 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+function isDelivered(result: ShipmentInfo | undefined): boolean {
+  if (!result) {
+    return false;
+  }
+  if (String(result.status?.code ?? "").trim() === "5") {
+    return true;
+  }
+  const description = String(result.status?.description ?? "").toLowerCase();
+  return description.includes("deliver");
+}
+
 export class TrackingScheduler {
   private readonly enabled: boolean;
   private readonly intervalMs: number;
@@ -136,6 +166,36 @@ export class TrackingScheduler {
     };
   }
 
+  async listTargets(): Promise<WatchedTargetView[]> {
+    if (!this.enabled) {
+      return [];
+    }
+
+    await this.ensureLoaded();
+
+    return Object.entries(this.state.watchedTargets)
+      .map(([key, target]) => ({
+        key,
+        source: target.source,
+        params: target.params,
+        friendlyName: target.friendlyName,
+        createdAt: target.createdAt,
+        updatedAt: target.updatedAt,
+        nextRunAt:
+          target.nextRunAt >= Number.MAX_SAFE_INTEGER
+            ? undefined
+            : new Date(target.nextRunAt).toISOString(),
+        deliveredAt: target.deliveredAt,
+        isDelivered: Boolean(target.deliveredAt),
+        lastCheckedAt: target.lastCheckedAt,
+        lastSuccessAt: target.lastSuccessAt,
+        lastError: target.lastError,
+        consecutiveFailures: target.consecutiveFailures,
+        lastResult: target.lastResult,
+      }))
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  }
+
   async start(): Promise<void> {
     if (!this.enabled) {
       return;
@@ -173,7 +233,8 @@ export class TrackingScheduler {
 
   async registerTarget(
     source: string,
-    params: Record<string, string>
+    params: Record<string, string>,
+    options: { friendlyName?: string } = {}
   ): Promise<void> {
     if (!this.enabled) {
       return;
@@ -190,9 +251,13 @@ export class TrackingScheduler {
     this.state.watchedTargets[key] = {
       source,
       params: sortedParams,
+      friendlyName: options.friendlyName ?? existing?.friendlyName,
       createdAt: existing?.createdAt ?? updatedAt,
       updatedAt,
-      nextRunAt: existing?.nextRunAt ?? now + this.intervalMs,
+      nextRunAt: existing?.deliveredAt
+        ? Number.MAX_SAFE_INTEGER
+        : existing?.nextRunAt ?? now + this.intervalMs,
+      deliveredAt: existing?.deliveredAt,
       lastCheckedAt: existing?.lastCheckedAt,
       lastSuccessAt: existing?.lastSuccessAt,
       lastError: existing?.lastError,
@@ -201,6 +266,25 @@ export class TrackingScheduler {
     };
 
     await this.queueSave();
+  }
+
+  async unregisterTarget(
+    source: string,
+    params: Record<string, string>
+  ): Promise<boolean> {
+    if (!this.enabled) {
+      return false;
+    }
+
+    await this.ensureLoaded();
+
+    const key = buildTargetKey(source, params);
+    const existed = typeof this.state.watchedTargets[key] !== "undefined";
+    if (existed) {
+      delete this.state.watchedTargets[key];
+      await this.queueSave();
+    }
+    return existed;
   }
 
   async recordSuccess(
@@ -223,9 +307,13 @@ export class TrackingScheduler {
     this.state.watchedTargets[key] = {
       source,
       params: sortedParams,
+      friendlyName: existing?.friendlyName,
       createdAt: existing?.createdAt ?? timestamp,
       updatedAt: timestamp,
-      nextRunAt: now + this.intervalMs,
+      nextRunAt: isDelivered(result)
+        ? Number.MAX_SAFE_INTEGER
+        : now + this.intervalMs,
+      deliveredAt: isDelivered(result) ? timestamp : undefined,
       lastCheckedAt: timestamp,
       lastSuccessAt: timestamp,
       lastError: undefined,
@@ -256,9 +344,13 @@ export class TrackingScheduler {
     this.state.watchedTargets[key] = {
       source,
       params: sortedParams,
+      friendlyName: existing?.friendlyName,
       createdAt: existing?.createdAt ?? timestamp,
       updatedAt: timestamp,
-      nextRunAt: now + this.intervalMs,
+      nextRunAt: existing?.deliveredAt
+        ? Number.MAX_SAFE_INTEGER
+        : now + this.intervalMs,
+      deliveredAt: existing?.deliveredAt,
       lastCheckedAt: timestamp,
       lastSuccessAt: existing?.lastSuccessAt,
       lastError: message,
@@ -290,6 +382,9 @@ export class TrackingScheduler {
       sourcesRegistry.initialize(this.env);
 
       for (const [key, target] of Object.entries(this.state.watchedTargets)) {
+        if (!force && target.deliveredAt) {
+          continue;
+        }
         if (!force && target.nextRunAt > currentTime) {
           continue;
         }
@@ -332,7 +427,10 @@ export class TrackingScheduler {
     this.state.watchedTargets[key] = {
       ...target,
       updatedAt: timestamp,
-      nextRunAt: now + this.intervalMs,
+      nextRunAt: isDelivered(result)
+        ? Number.MAX_SAFE_INTEGER
+        : now + this.intervalMs,
+      deliveredAt: isDelivered(result) ? timestamp : undefined,
       lastCheckedAt: timestamp,
       lastSuccessAt: timestamp,
       lastError: undefined,
@@ -351,7 +449,7 @@ export class TrackingScheduler {
     this.state.watchedTargets[key] = {
       ...target,
       updatedAt: timestamp,
-      nextRunAt: now + this.intervalMs,
+      nextRunAt: target.deliveredAt ? Number.MAX_SAFE_INTEGER : now + this.intervalMs,
       lastCheckedAt: timestamp,
       lastError: message,
       consecutiveFailures: target.consecutiveFailures + 1,

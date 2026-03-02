@@ -70,6 +70,93 @@ afterEach(async () => {
 });
 
 describe("TrackingScheduler", () => {
+  it("stops automatic polling after a target is delivered", async () => {
+    const server = await createMockScraperServer((_req, res) => {
+      res.setHeader("content-type", "application/json");
+      res.end(
+        JSON.stringify({
+          trackingNumber: "9400150208203004850386",
+          trackingUrl:
+            "https://tools.usps.com/go/TrackConfirmAction.action?tLabels=9400150208203004850386",
+          carrier: "usps",
+          status: {
+            code: "5",
+            description: "Delivered",
+            timestamp: "2026-02-28T22:19:00.000Z",
+            location: "TEST CITY, ST 00000",
+          },
+          events: [
+            {
+              code: "5",
+              description: "Delivered",
+              timestamp: "2026-02-28T22:19:00.000Z",
+              location: "TEST CITY, ST 00000",
+            },
+          ],
+        })
+      );
+    });
+    cleanupTasks.push(server.close);
+
+    const stateDir = await mkdtemp(join(tmpdir(), "packt-scheduler-test-"));
+    cleanupTasks.push(async () => {
+      await rm(stateDir, { recursive: true, force: true });
+    });
+
+    const scheduler = new TrackingScheduler({
+      USPS_SCRAPER_URL: server.baseUrl,
+      PACKT_TRACKING_SCHEDULER_ENABLED: "true",
+      PACKT_TRACKING_SCHEDULER_INTERVAL_MS: "1000",
+      PACKT_TRACKING_SCHEDULER_STATE_FILE: join(stateDir, "scheduler.json"),
+      PACKT_TRACKING_SCHEDULER_RUN_ON_START: "false",
+    });
+    cleanupTasks.push(async () => scheduler.stop());
+
+    await scheduler.start();
+    await scheduler.registerTarget("usps", {
+      trackingNumber: "9400150208203004850386",
+    });
+
+    await scheduler.runNow({ force: true });
+    await scheduler.runNow();
+
+    expect(server.requests.length).toBe(1);
+  });
+
+  it("persists friendlyName metadata and supports removing targets", async () => {
+    const stateDir = await mkdtemp(join(tmpdir(), "packt-scheduler-test-"));
+    cleanupTasks.push(async () => {
+      await rm(stateDir, { recursive: true, force: true });
+    });
+
+    const scheduler = new TrackingScheduler({
+      PACKT_TRACKING_SCHEDULER_ENABLED: "true",
+      PACKT_TRACKING_SCHEDULER_INTERVAL_MS: "14400000",
+      PACKT_TRACKING_SCHEDULER_STATE_FILE: join(stateDir, "scheduler.json"),
+      PACKT_TRACKING_SCHEDULER_RUN_ON_START: "false",
+    });
+    cleanupTasks.push(async () => scheduler.stop());
+
+    await scheduler.start();
+    await scheduler.registerTarget(
+      "uniuni",
+      { trackingNumber: "UUS62M6610133301160" },
+      { friendlyName: "Desk Lamp" }
+    );
+
+    const targets = await scheduler.listTargets();
+    expect(targets).toHaveLength(1);
+    expect(targets[0].friendlyName).toBe("Desk Lamp");
+
+    const removed = await scheduler.unregisterTarget("uniuni", {
+      trackingNumber: "UUS62M6610133301160",
+    });
+    expect(removed).toBe(true);
+
+    const afterRemoval = await scheduler.listTargets();
+    expect(afterRemoval).toHaveLength(0);
+  });
+
   it("polls UniUni targets through the scheduler", async () => {
     const server = await createMockScraperServer((req, res) => {
       if (req.url !== "/track/uniuni" || req.method !== "POST") {

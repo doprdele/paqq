@@ -1,4 +1,4 @@
-const CACHE_NAME = 'packt';
+const CACHE_NAME = 'packt-v2';
 const urlsToCache = [
   '/',
   'index.html',
@@ -19,6 +19,23 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
+  const requestUrl = new URL(event.request.url);
+  const isSameOrigin = requestUrl.origin === self.location.origin;
+
+  // Always fetch live tracking/API responses.
+  if (
+    isSameOrigin &&
+    (requestUrl.pathname.startsWith('/api/') ||
+      requestUrl.pathname === '/runtime-config.js')
+  ) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then((response) => {

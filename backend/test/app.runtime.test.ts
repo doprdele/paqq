@@ -24,4 +24,12 @@ describe('runtime-neutral app handler', () => {
     const response = await handleRequest(new Request('https://packt.test/api/scheduler/status'), {});
     expect(response.status).toBe(404);
   });
+
+  it('returns 404 for scheduler targets endpoint in worker runtime', async () => {
+    const response = await handleRequest(
+      new Request('https://packt.test/api/scheduler/targets'),
+      {}
+    );
+    expect(response.status).toBe(404);
+  });
 });

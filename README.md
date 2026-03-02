@@ -112,6 +112,8 @@ Backend scheduler environment variables (self-hosted Node runtime):
 - `PACKT_TRACKING_SCHEDULER_STATE_FILE` (default `/app/data/tracking-scheduler-state.json`)
 
 The backend scheduler is serialized: only one scheduler run executes at a time.
+Watched packages and latest tracking snapshots are persisted in `PACKT_TRACKING_SCHEDULER_STATE_FILE`.
+Scheduler polling now continues until a package is delivered, then pauses automatic rechecks for that package.
 
 ### Frontend
 By default the frontend uses `https://packt.notri1.workers.dev`.

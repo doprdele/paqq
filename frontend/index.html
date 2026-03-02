@@ -385,6 +385,112 @@
         }
       }
 
+      function buildWatchParamsFromPackage(packageData) {
+        return {
+          trackingNumber: packageData.trackingNumber,
+          ...(packageData.requiredFields || {}),
+        };
+      }
+
+      async function hydratePackagesFromBackend() {
+        const targets = await apiService.getPersistedTargets();
+        if (!Array.isArray(targets) || targets.length === 0) {
+          return;
+        }
+
+        let nextId = Math.max(0, ...packages.map((p) => p.id || 0)) + 1;
+        let changed = false;
+
+        for (const target of targets) {
+          if (!target || typeof target !== "object") continue;
+          if (typeof target.source !== "string") continue;
+          if (!target.params || typeof target.params !== "object") continue;
+
+          const trackingNumber =
+            target.lastResult?.trackingNumber || target.params.trackingNumber;
+          if (typeof trackingNumber !== "string" || !trackingNumber) continue;
+
+          const requiredFields = { ...target.params };
+          delete requiredFields.trackingNumber;
+
+          const statusCode =
+            target.lastResult?.status?.code ??
+            (target.isDelivered ? "5" : "1");
+          const statusDescription =
+            target.lastResult?.status?.description ??
+            (target.isDelivered ? "Delivered" : "Tracking registered");
+          const statusTimestamp =
+            target.lastResult?.status?.timestamp ??
+            target.updatedAt ??
+            new Date().toISOString();
+
+          const hydratedPackage = {
+            id: nextId,
+            friendlyName:
+              target.friendlyName || trackingNumber || target.source.toUpperCase(),
+            carrier: target.source,
+            status: statusCode,
+            description: statusDescription,
+            progress: calculateProgress(statusCode),
+            lastUpdate: statusTimestamp,
+            trackingNumber,
+            trackingUrl:
+              target.lastResult?.trackingUrl ||
+              `https://www.${target.source}.com`,
+            events: Array.isArray(target.lastResult?.events)
+              ? target.lastResult.events
+              : [],
+            requiredFields,
+          };
+
+          const existingIndex = packages.findIndex(
+            (pkg) =>
+              pkg.carrier === hydratedPackage.carrier &&
+              pkg.trackingNumber === hydratedPackage.trackingNumber
+          );
+
+          if (existingIndex === -1) {
+            packages.push(hydratedPackage);
+            nextId += 1;
+            changed = true;
+            continue;
+          }
+
+          const existingPackage = packages[existingIndex];
+          const mergedPackage = {
+            ...existingPackage,
+            ...hydratedPackage,
+            id: existingPackage.id,
+            friendlyName:
+              existingPackage.friendlyName || hydratedPackage.friendlyName,
+          };
+
+          if (JSON.stringify(existingPackage) !== JSON.stringify(mergedPackage)) {
+            packages[existingIndex] = mergedPackage;
+            changed = true;
+          }
+        }
+
+        if (changed) {
+          savePackagesToLocalStorage();
+          renderPackages();
+        }
+      }
+
+      async function syncLocalPackagesToBackend() {
+        for (const packageData of packages) {
+          try {
+            await apiService.watchTarget(
+              packageData.carrier,
+              buildWatchParamsFromPackage(packageData),
+              packageData.friendlyName
+            );
+          } catch (error) {
+            console.error("Failed to sync package to backend:", error);
+          }
+        }
+      }
+
       let packages = [];
       let recheckInProgress = false;
 
@@ -416,6 +522,57 @@
             console.error("Error fetching tracking info:", error);
             showToast("Failed to fetch tracking information", "error");
             return null;
+          }
+        },
+
+        async getPersistedTargets() {
+          try {
+            const response = await fetch(`${API_BASE_URL}/api/scheduler/targets`);
+            if (response.status === 404) {
+              return [];
+            }
+            if (!response.ok) {
+              throw new Error("Failed to fetch persisted targets");
+            }
+            return await response.json();
+          } catch (error) {
+            console.error("Error fetching persisted targets:", error);
+            return [];
+          }
+        },
+
+        async watchTarget(source, params, friendlyName) {
+          try {
+            const response = await fetch(`${API_BASE_URL}/api/scheduler/watch`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ source, params, friendlyName }),
+            });
+
+            if (response.status === 404) {
+              return false;
+            }
+            return response.ok;
+          } catch (error) {
+            console.error("Error persisting watched target:", error);
+            return false;
+          }
+        },
+
+        async unwatchTarget(source, params) {
+          try {
+            const response = await fetch(`${API_BASE_URL}/api/scheduler/unwatch`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ source, params }),
+            });
+            if (response.status === 404) {
+              return false;
+            }
+            return response.ok;
+          } catch (error) {
+            console.error("Error removing watched target:", error);
+            return false;
           }
         },
       };
@@ -841,8 +998,11 @@
         showModal(modal);
       }
 
-      function deletePackage(packageId) {
-        packages = packages.filter((p) => p.id !== packageId);
+      async function deletePackage(packageData) {
+        const watchParams = buildWatchParamsFromPackage(packageData);
+        await apiService.unwatchTarget(packageData.carrier, watchParams);
+
+        packages = packages.filter((p) => p.id !== packageData.id);
         savePackagesToLocalStorage();
         renderPackages();
         hideModal(deleteConfirmModal);
@@ -858,6 +1018,13 @@
           friendlyName: document.getElementById("friendlyName").value,
           carrier: document.getElementById("carrier").value,
         };
+
+        const previousTarget = currentPackage
+          ? {
+              source: currentPackage.carrier,
+              params: buildWatchParamsFromPackage(currentPackage),
+            }
+          : null;
 
         const additionalFields = document
           .getElementById("additionalFields")
@@ -920,6 +1087,24 @@
             });
           }
 
+          if (
+            previousTarget &&
+            (previousTarget.source !== newPackage.carrier ||
+              JSON.stringify(previousTarget.params) !==
+                JSON.stringify(buildWatchParamsFromPackage(newPackage)))
+          ) {
+            await apiService.unwatchTarget(
+              previousTarget.source,
+              previousTarget.params
+            );
+          }
+
+          await apiService.watchTarget(
+            newPackage.carrier,
+            buildWatchParamsFromPackage(newPackage),
+            newPackage.friendlyName
+          );
+
           savePackagesToLocalStorage();
           renderPackages();
           hideModal(modal);
@@ -974,7 +1159,7 @@
       );
       confirmDeleteBtn.addEventListener("click", () => {
         if (currentPackage) {
-          deletePackage(currentPackage.id);
+          void deletePackage(currentPackage);
         }
       });
 
@@ -1082,8 +1267,10 @@
 
       document.addEventListener("DOMContentLoaded", async () => {
         await updateFormFields();
-        await checkForPackageImport();
         loadPackagesFromLocalStorage();
+        await hydratePackagesFromBackend();
+        await checkForPackageImport();
+        await syncLocalPackagesToBackend();
         renderPackages();
         updateAnalyticsToggleButton();
 
@@ -1190,6 +1377,11 @@
             };
 
             packages.push(newPackage);
+            await apiService.watchTarget(
+              newPackage.carrier,
+              buildWatchParamsFromPackage(newPackage),
+              newPackage.friendlyName
+            );
             savePackagesToLocalStorage();
             renderPackages();
             showToast("Package imported successfully");

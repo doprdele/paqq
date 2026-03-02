@@ -32,7 +32,7 @@
     />
     <meta
       name="keywords"
-      content="package, packages, tracking, tracker, asendia, mondialrelay, colis, parcel, laposte, ups, dhl, colissimo, suivi"
+      content="package, packages, tracking, tracker, asendia, mondialrelay, colis, parcel, laposte, ups, dhl, colissimo, usps, suivi"
     />
     <meta name="robots" content="index, follow" />
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
@@ -50,6 +50,7 @@
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
     />
+    <script src="runtime-config.js"></script>
     <link rel="icon" href="icons/favicon.png" />
   </head>
 
@@ -281,7 +282,9 @@
       </div>
     </div>
     <script>
-      const API_BASE_URL = "https://packt.notri1.workers.dev";
+      const API_BASE_URL =
+        window.__PACKT_CONFIG__?.API_BASE_URL ||
+        "https://packt.notri1.workers.dev";
 
       const STORAGE_KEY = "packt_packages";
       const ANALYTICS_PREF_KEY = "packt_analytics_enabled";

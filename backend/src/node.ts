@@ -1,9 +1,13 @@
 import { createServer } from 'node:http';
 import { Readable } from 'node:stream';
 import { handleRequest } from './app';
+import { TrackingScheduler } from './scheduler';
 
 const port = Number(process.env.PORT ?? '8787');
 const host = process.env.HOST ?? '0.0.0.0';
+const scheduler = new TrackingScheduler(process.env);
+
+void scheduler.start();
 
 const server = createServer(async (req, res) => {
   try {
@@ -42,7 +46,7 @@ const server = createServer(async (req, res) => {
     }
 
     const request = new Request(requestUrl, init);
-    const response = await handleRequest(request, process.env);
+    const response = await handleRequest(request, process.env, { scheduler });
 
     res.statusCode = response.status;
     response.headers.forEach((value, key) => {
@@ -67,3 +71,6 @@ const server = createServer(async (req, res) => {
 server.listen(port, host, () => {
   process.stdout.write(`Packt backend (node adapter) listening on ${host}:${port}\n`);
 });
+
+process.on('SIGTERM', () => scheduler.stop());
+process.on('SIGINT', () => scheduler.stop());

@@ -89,15 +89,19 @@ USPS scraper environment variables:
 - `USPS_SCRAPE_MAX_ATTEMPTS` (optional retries, default `10`)
 - `USPS_CDP_WS_ENDPOINT` (optional CDP endpoint used by scraper via `connectOverCDP`)
 
+Backend scheduler environment variables (self-hosted Node runtime):
+- `PACKT_TRACKING_SCHEDULER_ENABLED` (default `true`)
+- `PACKT_TRACKING_SCHEDULER_INTERVAL_MS` (default `14400000`, i.e. 4 hours)
+- `PACKT_TRACKING_SCHEDULER_RUN_ON_START` (default `true`)
+- `PACKT_TRACKING_SCHEDULER_STATE_FILE` (default `/app/data/tracking-scheduler-state.json`)
+
+The backend scheduler is serialized: only one scheduler run executes at a time.
+
 ### Frontend
 By default the frontend uses `https://packt.notri1.workers.dev`.
 
 For self-hosting, configure `frontend/runtime-config.js`:
 - `API_BASE_URL`
-- `AUTO_RECHECK_ENABLED` (default `true`)
-- `AUTO_RECHECK_INTERVAL_MS` (default `14400000`, i.e. 4 hours)
-
-Package rechecks are serialized client-side, so only one recheck run executes at a time.
 
 ### Docker Compose (Self-Hosted)
 
@@ -118,11 +122,13 @@ Endpoints:
 
 Optional environment overrides:
 - `PACKT_API_BASE_URL` (frontend runtime config; default empty in compose, so nginx proxies `/api` to backend)
-- `PACKT_AUTO_RECHECK_ENABLED` (frontend auto recheck scheduler toggle; default `true`)
-- `PACKT_AUTO_RECHECK_INTERVAL_MS` (frontend auto recheck interval; default `14400000`)
 - `USPS_SCRAPER_TOKEN`
 - `USPS_SCRAPER_TIMEOUT_MS`
 - `USPS_SCRAPE_MAX_ATTEMPTS`
+- `PACKT_TRACKING_SCHEDULER_ENABLED`
+- `PACKT_TRACKING_SCHEDULER_INTERVAL_MS`
+- `PACKT_TRACKING_SCHEDULER_RUN_ON_START`
+- `PACKT_TRACKING_SCHEDULER_STATE_FILE`
 
 ## API Documentation 
 

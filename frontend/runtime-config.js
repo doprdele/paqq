@@ -1,5 +1,1 @@
-window.__PACKT_CONFIG__ = {
-  AUTO_RECHECK_ENABLED: true,
-  AUTO_RECHECK_INTERVAL_MS: 14400000,
-  ...(window.__PACKT_CONFIG__ || {}),
-};
+window.__PACKT_CONFIG__ = window.__PACKT_CONFIG__ || {};

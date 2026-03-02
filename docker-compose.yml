@@ -24,11 +24,17 @@ services:
       USPS_SCRAPER_URL: "http://usps-scraper:8790"
       USPS_SCRAPER_TOKEN: "${USPS_SCRAPER_TOKEN:-}"
       USPS_SCRAPER_TIMEOUT_MS: "${USPS_SCRAPER_TIMEOUT_MS:-300000}"
+      PACKT_TRACKING_SCHEDULER_ENABLED: "${PACKT_TRACKING_SCHEDULER_ENABLED:-true}"
+      PACKT_TRACKING_SCHEDULER_INTERVAL_MS: "${PACKT_TRACKING_SCHEDULER_INTERVAL_MS:-14400000}"
+      PACKT_TRACKING_SCHEDULER_RUN_ON_START: "${PACKT_TRACKING_SCHEDULER_RUN_ON_START:-true}"
+      PACKT_TRACKING_SCHEDULER_STATE_FILE: "${PACKT_TRACKING_SCHEDULER_STATE_FILE:-/app/data/tracking-scheduler-state.json}"
     depends_on:
       usps-scraper:
         condition: service_healthy
     ports:
       - "8787:8787"
+    volumes:
+      - backend-data:/app/data
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/api/list').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
@@ -41,8 +47,6 @@ services:
       context: ./frontend
     environment:
       PACKT_API_BASE_URL: "${PACKT_API_BASE_URL:-}"
-      PACKT_AUTO_RECHECK_ENABLED: "${PACKT_AUTO_RECHECK_ENABLED:-true}"
-      PACKT_AUTO_RECHECK_INTERVAL_MS: "${PACKT_AUTO_RECHECK_INTERVAL_MS:-14400000}"
     depends_on:
       backend:
         condition: service_healthy
@@ -54,3 +58,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+
+volumes:
+  backend-data:

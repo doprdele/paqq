@@ -282,43 +282,9 @@
       </div>
     </div>
     <script>
-      const DEFAULT_AUTO_RECHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
-
-      function parseBooleanConfig(value, fallback) {
-        if (typeof value === "boolean") {
-          return value;
-        }
-        if (typeof value === "string") {
-          const normalized = value.trim().toLowerCase();
-          if (["1", "true", "yes", "on"].includes(normalized)) {
-            return true;
-          }
-          if (["0", "false", "no", "off"].includes(normalized)) {
-            return false;
-          }
-        }
-        return fallback;
-      }
-
-      function parsePositiveIntegerConfig(value, fallback) {
-        const parsed = Number(value);
-        if (Number.isInteger(parsed) && parsed > 0) {
-          return parsed;
-        }
-        return fallback;
-      }
-
       const API_BASE_URL =
         window.__PACKT_CONFIG__?.API_BASE_URL ||
         "https://packt.notri1.workers.dev";
-      const AUTO_RECHECK_ENABLED = parseBooleanConfig(
-        window.__PACKT_CONFIG__?.AUTO_RECHECK_ENABLED,
-        true
-      );
-      const AUTO_RECHECK_INTERVAL_MS = parsePositiveIntegerConfig(
-        window.__PACKT_CONFIG__?.AUTO_RECHECK_INTERVAL_MS,
-        DEFAULT_AUTO_RECHECK_INTERVAL_MS
-      );
 
       const STORAGE_KEY = "packt_packages";
       const ANALYTICS_PREF_KEY = "packt_analytics_enabled";
@@ -421,7 +387,6 @@
 
       let packages = [];
       let recheckInProgress = false;
-      let autoRecheckIntervalId = null;
 
       loadPackagesFromLocalStorage();
 
@@ -1125,7 +1090,6 @@
         if (packages.length > 0) {
           await recheckPackageStatuses({ showToastMessages: false });
         }
-        setupAutoRecheckScheduler();
 
         const analyticsToggle = document.getElementById("analyticsToggle");
 
@@ -1250,18 +1214,6 @@
             );
           }
         }
-      }
-
-      function setupAutoRecheckScheduler() {
-        if (!AUTO_RECHECK_ENABLED) {
-          return;
-        }
-        if (autoRecheckIntervalId !== null) {
-          clearInterval(autoRecheckIntervalId);
-        }
-        autoRecheckIntervalId = setInterval(() => {
-          void recheckPackageStatuses({ showToastMessages: false });
-        }, AUTO_RECHECK_INTERVAL_MS);
       }
 
       async function recheckPackageStatuses(options = {}) {

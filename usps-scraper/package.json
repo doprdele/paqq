@@ -8,7 +8,9 @@
     "start": "tsx src/server.ts",
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "test:live": "RUN_LIVE_USPS_TESTS=1 vitest run tests/live.usps.integration.test.ts"
+    "test:live": "RUN_LIVE_USPS_TESTS=1 vitest run tests/live.usps.integration.test.ts",
+    "test:live:uniuni": "RUN_LIVE_UNIUNI_TESTS=1 vitest run tests/live.uniuni.integration.test.ts",
+    "test:live:all": "RUN_LIVE_USPS_TESTS=1 RUN_LIVE_UNIUNI_TESTS=1 vitest run tests/live.usps.integration.test.ts tests/live.uniuni.integration.test.ts"
   },
   "dependencies": {
     "playwright": "1.58.2",

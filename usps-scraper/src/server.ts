@@ -1,7 +1,13 @@
-import { createServer, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import { scrapeUspsTracking } from "./scrape.js";
+import { scrapeUniuniTracking } from "./uniuni.js";
 
 const port = Number(process.env.PORT ?? "8790");
+const TRACKING_ROUTES = new Set(["/track", "/track/usps", "/track/uniuni"]);
 
 function jsonResponse(
   res: ServerResponse,
@@ -17,25 +23,70 @@ function unauthorized(res: ServerResponse): void {
   jsonResponse(res, 401, { error: "Unauthorized" });
 }
 
+function getHeaderToken(
+  req: IncomingMessage,
+  headerName: string
+): string | undefined {
+  const providedToken = req.headers[headerName];
+  if (Array.isArray(providedToken)) {
+    return providedToken[0];
+  }
+  return providedToken;
+}
+
+function ensureAuthToken(
+  req: IncomingMessage,
+  res: ServerResponse,
+  envToken: string | undefined,
+  headerName: string
+): boolean {
+  if (!envToken) {
+    return true;
+  }
+  const provided = getHeaderToken(req, headerName);
+  if (provided !== envToken) {
+    unauthorized(res);
+    return false;
+  }
+  return true;
+}
+
 const server = createServer(async (req, res) => {
   try {
     if (req.method === "GET" && req.url === "/health") {
       return jsonResponse(res, 200, { ok: true });
     }
 
-    if (req.method !== "POST" || req.url !== "/track") {
+    if (
+      req.method !== "POST" ||
+      !req.url ||
+      !TRACKING_ROUTES.has(req.url)
+    ) {
       return jsonResponse(res, 404, { error: "Not found" });
     }
 
-    const expectedToken = process.env.USPS_SCRAPER_TOKEN;
-    if (expectedToken) {
-      const providedToken = req.headers["x-usps-scraper-token"];
-      const normalizedProvidedToken = Array.isArray(providedToken)
-        ? providedToken[0]
-        : providedToken;
+    const route =
+      req.url === "/track" || req.url === "/track/usps" ? "usps" : "uniuni";
 
-      if (normalizedProvidedToken !== expectedToken) {
-        return unauthorized(res);
+    if (route === "usps") {
+      const isAuthorized = ensureAuthToken(
+        req,
+        res,
+        process.env.USPS_SCRAPER_TOKEN,
+        "x-usps-scraper-token"
+      );
+      if (!isAuthorized) {
+        return;
+      }
+    } else {
+      const isAuthorized = ensureAuthToken(
+        req,
+        res,
+        process.env.UNIUNI_SCRAPER_TOKEN,
+        "x-uniuni-scraper-token"
+      );
+      if (!isAuthorized) {
+        return;
       }
     }
 
@@ -56,15 +107,18 @@ const server = createServer(async (req, res) => {
       return jsonResponse(res, 400, { error: "trackingNumber is required" });
     }
 
-    const shipment = await scrapeUspsTracking(trackingNumber, { timeoutMs });
+    const shipment =
+      route === "usps"
+        ? await scrapeUspsTracking(trackingNumber, { timeoutMs })
+        : await scrapeUniuniTracking(trackingNumber, { timeoutMs });
     return jsonResponse(res, 200, shipment);
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Unexpected USPS scraper error";
+      error instanceof Error ? error.message : "Unexpected scraper error";
     return jsonResponse(res, 500, { error: message });
   }
 });
 
 server.listen(port, () => {
-  process.stdout.write(`USPS scraper listening on port ${port}\n`);
+  process.stdout.write(`Packt scraper service listening on port ${port}\n`);
 });

@@ -18,6 +18,7 @@
   - Asendia
   - FedEx
   - USPS
+  - UniUni
   - Add your own !
   
 ###  **Easy Tracking**
@@ -70,9 +71,9 @@ npm install
 npm run start:node
 ```
 
-### USPS Scraper Service (Playwright/CDP)
+### Scraper Service (Playwright/CDP)
 
-USPS tracking is fetched through a dedicated scraper service (`usps-scraper`) using Playwright + stealth hardening.
+USPS and UniUni tracking are fetched through a dedicated scraper service (`usps-scraper`) using Playwright + stealth hardening.
 
 ```bash
 cd usps-scraper
@@ -85,9 +86,24 @@ Backend environment variables for USPS:
 - `USPS_SCRAPER_TOKEN` (optional shared secret, sent as `x-usps-scraper-token`)
 - `USPS_SCRAPER_TIMEOUT_MS` (optional request timeout, default `300000`)
 
+Backend environment variables for UniUni:
+- `UNIUNI_SCRAPER_URL` (default `http://127.0.0.1:8790`)
+- `UNIUNI_SCRAPER_TOKEN` (optional shared secret, sent as `x-uniuni-scraper-token`)
+- `UNIUNI_SCRAPER_TIMEOUT_MS` (optional request timeout, default `300000`)
+
 USPS scraper environment variables:
 - `USPS_SCRAPE_MAX_ATTEMPTS` (optional retries, default `10`)
 - `USPS_CDP_WS_ENDPOINT` (optional CDP endpoint used by scraper via `connectOverCDP`)
+
+UniUni scraper environment variables:
+- `UNIUNI_SCRAPE_MAX_ATTEMPTS` (optional retries, default `6`)
+- `UNIUNI_CDP_WS_ENDPOINT` (optional CDP endpoint used by scraper via `connectOverCDP`)
+- `UNIUNI_TRACKING_KEY` (optional override for UniUni's page-injected tracking key)
+
+Live tracking test commands:
+- `cd usps-scraper && npm run test:live` (USPS live tracking)
+- `cd usps-scraper && npm run test:live:uniuni` (UniUni live tracking)
+- `cd backend && npm run test:live:uniuni` (Packt backend live test via scraper service)
 
 Backend scheduler environment variables (self-hosted Node runtime):
 - `PACKT_TRACKING_SCHEDULER_ENABLED` (default `true`)
@@ -108,7 +124,7 @@ For self-hosting, configure `frontend/runtime-config.js`:
 This repository includes a self-host stack:
 - `frontend` (nginx)
 - `backend` (Node adapter)
-- `usps-scraper` (Playwright + stealth)
+- `usps-scraper` (Playwright + stealth for USPS + UniUni)
 
 Run:
 ```bash
@@ -118,13 +134,17 @@ docker compose up -d --build
 Endpoints:
 - Frontend: `http://localhost:8080`
 - Backend API: `http://localhost:8787`
-- USPS scraper: `http://localhost:8790`
+- Scraper service: `http://localhost:8790`
 
 Optional environment overrides:
 - `PACKT_API_BASE_URL` (frontend runtime config; default empty in compose, so nginx proxies `/api` to backend)
 - `USPS_SCRAPER_TOKEN`
 - `USPS_SCRAPER_TIMEOUT_MS`
 - `USPS_SCRAPE_MAX_ATTEMPTS`
+- `UNIUNI_SCRAPER_TOKEN`
+- `UNIUNI_SCRAPER_TIMEOUT_MS`
+- `UNIUNI_SCRAPE_MAX_ATTEMPTS`
+- `UNIUNI_TRACKING_KEY`
 - `PACKT_TRACKING_SCHEDULER_ENABLED`
 - `PACKT_TRACKING_SCHEDULER_INTERVAL_MS`
 - `PACKT_TRACKING_SCHEDULER_RUN_ON_START`

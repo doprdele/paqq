@@ -4,7 +4,14 @@ import type { Browser, BrowserContext, Locator, Page } from "playwright";
 import { normalizeUspsTracking, type RawUspsTracking } from "./normalize.js";
 import type { ScrapeOptions, ShipmentInfo } from "./types.js";
 
-chromium.use(StealthPlugin());
+const chromiumWithFlags = chromium as typeof chromium & {
+  __packtStealthApplied?: boolean;
+};
+
+if (!chromiumWithFlags.__packtStealthApplied) {
+  chromium.use(StealthPlugin());
+  chromiumWithFlags.__packtStealthApplied = true;
+}
 
 const TRACKING_LANDING_URL = "https://www.usps.com/tracking/";
 const TRACKING_URL_BASE =

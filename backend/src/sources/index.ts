@@ -8,6 +8,7 @@ import { LaposteSource } from './implementations/laposte';
 import { DHLSource } from './implementations/dhl';
 import { FedexSource } from './implementations/fedex';
 import { USPSSource } from './implementations/usps';
+import { UniuniSource } from './implementations/uniuni';
 
 class SourcesRegistry {
   private sources: Map<string, TrackingSource> = new Map();
@@ -40,6 +41,7 @@ class SourcesRegistry {
     this.register(new DHLSource(env));
     this.register(new FedexSource(env));
     this.register(new USPSSource(env));
+    this.register(new UniuniSource(env));
   }
 }
 

@@ -70,6 +70,69 @@ afterEach(async () => {
 });
 
 describe("TrackingScheduler", () => {
+  it("polls UniUni targets through the scheduler", async () => {
+    const server = await createMockScraperServer((req, res) => {
+      if (req.url !== "/track/uniuni" || req.method !== "POST") {
+        res.statusCode = 404;
+        res.end("not found");
+        return;
+      }
+
+      res.setHeader("content-type", "application/json");
+      res.end(
+        JSON.stringify({
+          trackingNumber: "UUS62M6610133301160",
+          trackingUrl: "https://www.uniuni.com/tracking/",
+          carrier: "uniuni",
+          status: {
+            code: "3",
+            description: "Parcel in transit",
+            timestamp: "2026-02-24T21:13:43.000Z",
+            location: "Carlstadt NJ",
+          },
+          events: [
+            {
+              code: "3",
+              description: "Parcel in transit",
+              timestamp: "2026-02-24T21:13:43.000Z",
+              location: "Carlstadt NJ",
+            },
+          ],
+        })
+      );
+    });
+    cleanupTasks.push(server.close);
+
+    const stateDir = await mkdtemp(join(tmpdir(), "packt-scheduler-test-"));
+    const stateFile = join(stateDir, "scheduler-uniuni.json");
+    cleanupTasks.push(async () => {
+      await rm(stateDir, { recursive: true, force: true });
+    });
+
+    const scheduler = new TrackingScheduler({
+      UNIUNI_SCRAPER_URL: server.baseUrl,
+      PACKT_TRACKING_SCHEDULER_ENABLED: "true",
+      PACKT_TRACKING_SCHEDULER_INTERVAL_MS: "14400000",
+      PACKT_TRACKING_SCHEDULER_STATE_FILE: stateFile,
+      PACKT_TRACKING_SCHEDULER_RUN_ON_START: "false",
+    });
+    cleanupTasks.push(async () => scheduler.stop());
+
+    await scheduler.start();
+    await scheduler.registerTarget("uniuni", {
+      trackingNumber: "UUS62M6610133301160",
+    });
+    await scheduler.runNow({ force: true });
+
+    expect(server.requests.length).toBe(1);
+    expect(server.requests[0].url).toBe("/track/uniuni");
+
+    const persisted = JSON.parse(await readFile(stateFile, "utf8")) as {
+      watchedTargets: Record<string, unknown>;
+    };
+    expect(Object.keys(persisted.watchedTargets).length).toBe(1);
+  });
+
   it("serializes runs so only one run executes at a time", async () => {
     const server = await createMockScraperServer(async (_req, res) => {
       await new Promise((resolve) => setTimeout(resolve, 200));

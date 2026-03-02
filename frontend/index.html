@@ -52,6 +52,58 @@
     />
     <script src="runtime-config.js"></script>
     <link rel="icon" href="icons/favicon.png" />
+    <style>
+      @keyframes packtDotBounce {
+        0%,
+        80%,
+        100% {
+          transform: translateY(0);
+          opacity: 0.35;
+        }
+        40% {
+          transform: translateY(-4px);
+          opacity: 1;
+        }
+      }
+
+      .packt-loading-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+        border-radius: 9999px;
+        padding: 0.25rem 0.65rem;
+        font-size: 0.75rem;
+        color: #6f4e37;
+        background: rgba(166, 123, 91, 0.14);
+      }
+
+      .dark .packt-loading-chip {
+        color: #d8c2b0;
+        background: rgba(216, 194, 176, 0.12);
+      }
+
+      .packt-loading-dots {
+        display: inline-flex;
+        gap: 0.2rem;
+      }
+
+      .packt-loading-dots span {
+        width: 0.3rem;
+        height: 0.3rem;
+        border-radius: 9999px;
+        background: currentColor;
+        animation: packtDotBounce 0.9s infinite ease-in-out;
+      }
+
+      .packt-loading-dots span:nth-child(2) {
+        animation-delay: 0.1s;
+      }
+
+      .packt-loading-dots span:nth-child(3) {
+        animation-delay: 0.2s;
+      }
+    </style>
   </head>
 
   <body
@@ -392,6 +444,21 @@
         };
       }
 
+      function getTrackingNumberFromParams(params) {
+        if (!params || typeof params !== "object") return "";
+        if (typeof params.trackingNumber !== "string") return "";
+        return params.trackingNumber.trim();
+      }
+
+      function hasWatchTargetChanged(previousTarget, packageData) {
+        if (!previousTarget) return false;
+        return (
+          previousTarget.source !== packageData.carrier ||
+          JSON.stringify(previousTarget.params) !==
+            JSON.stringify(buildWatchParamsFromPackage(packageData))
+        );
+      }
+
       async function hydratePackagesFromBackend() {
         const targets = await apiService.getPersistedTargets();
         if (!Array.isArray(targets) || targets.length === 0) {
@@ -493,6 +560,9 @@
 
       let packages = [];
       let recheckInProgress = false;
+      const TRACKING_LOOKUP_MAX_ATTEMPTS = 6;
+      const TRACKING_LOOKUP_RETRY_MS = 6000;
+      const trackingLookupTimers = new Map();
 
       loadPackagesFromLocalStorage();
 
@@ -510,7 +580,8 @@
           }
         },
 
-        async getTrackingInfo(source, params) {
+        async getTrackingInfo(source, params, options = {}) {
+          const showErrorToast = options.showErrorToast ?? true;
           try {
             const queryParams = new URLSearchParams({ source, ...params });
             const response = await fetch(
@@ -520,7 +591,9 @@
             return await response.json();
           } catch (error) {
             console.error("Error fetching tracking info:", error);
-            showToast("Failed to fetch tracking information", "error");
+            if (showErrorToast) {
+              showToast("Failed to fetch tracking information", "error");
+            }
             return null;
           }
         },
@@ -646,7 +719,12 @@
 
       function createPackageCard(package) {
         const sanitizedName = sanitizeHTML(package.friendlyName);
-        const sanitizedDescription = sanitizeHTML(package.description);
+        const isTrackingPending = package.isTrackingPending === true;
+        const trackingFetchFailed = package.trackingFetchFailed === true;
+        const descriptionText = isTrackingPending
+          ? "Brewing the latest tracking update..."
+          : package.description || "Tracking scheduled in background.";
+        const sanitizedDescription = sanitizeHTML(descriptionText);
         const sanitizedCarrier = sanitizeHTML(package.carrier);
         const sanitizedLogo = sanitizeUrl(carrierLogos[package.carrier] || "");
         const lastLocation =
@@ -656,6 +734,24 @@
         const sanitizedLocation = lastLocation
           ? sanitizeHTML(lastLocation)
           : null;
+
+        const pendingStatusHtml = isTrackingPending
+          ? `
+              <div class="packt-loading-chip">
+                  <span class="packt-loading-dots" aria-hidden="true">
+                      <span></span><span></span><span></span>
+                  </span>
+                  <span>Fetching details...</span>
+              </div>
+            `
+          : trackingFetchFailed
+          ? `
+              <div class="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                  <i class="fas fa-clock-rotate-left mr-1"></i>
+                  Tracking is queued and will retry in the background.
+              </div>
+            `
+          : "";
 
         const timeAgo = (() => {
           const diff =
@@ -711,6 +807,7 @@
                     <p class="text-sm sm:text-base text-gray-600 dark:text-gray-300 mt-2 line-clamp-2">
                         ${sanitizedDescription}
                     </p>
+                    ${pendingStatusHtml}
                     ${
                       sanitizedLocation
                         ? `
@@ -1001,6 +1098,7 @@
       async function deletePackage(packageData) {
         const watchParams = buildWatchParamsFromPackage(packageData);
         await apiService.unwatchTarget(packageData.carrier, watchParams);
+        cancelPackageTrackingLookup(packageData.id);
 
         packages = packages.filter((p) => p.id !== packageData.id);
         savePackagesToLocalStorage();
@@ -1011,7 +1109,155 @@
         trackUmamiEvent("package_delete");
       }
 
-      addPackageForm.addEventListener("submit", async (e) => {
+      function cancelPackageTrackingLookup(packageId) {
+        const timerId = trackingLookupTimers.get(packageId);
+        if (timerId) {
+          clearTimeout(timerId);
+          trackingLookupTimers.delete(packageId);
+        }
+      }
+
+      function schedulePackageTrackingLookup(packageId, attempt, fingerprint) {
+        cancelPackageTrackingLookup(packageId);
+        const delay = Math.max(1, attempt - 1) * TRACKING_LOOKUP_RETRY_MS;
+        const timerId = setTimeout(() => {
+          trackingLookupTimers.delete(packageId);
+          void fetchPackageDetailsInBackground(packageId, attempt, fingerprint);
+        }, delay);
+        trackingLookupTimers.set(packageId, timerId);
+      }
+
+      async function fetchPackageDetailsInBackground(
+        packageId,
+        attempt = 1,
+        expectedFingerprint = null
+      ) {
+        const packageIndex = packages.findIndex((pkg) => pkg.id === packageId);
+        if (packageIndex === -1) {
+          cancelPackageTrackingLookup(packageId);
+          return;
+        }
+
+        const packageData = packages[packageIndex];
+        if (!packageData.isTrackingPending && attempt > 1) {
+          cancelPackageTrackingLookup(packageId);
+          return;
+        }
+        const lookupParams = buildWatchParamsFromPackage(packageData);
+        const lookupFingerprint = JSON.stringify({
+          carrier: packageData.carrier,
+          params: lookupParams,
+        });
+        if (
+          expectedFingerprint &&
+          lookupFingerprint !== String(expectedFingerprint)
+        ) {
+          return;
+        }
+
+        const trackingInfo = await apiService.getTrackingInfo(
+          packageData.carrier,
+          lookupParams,
+          { showErrorToast: false }
+        );
+
+        const currentIndex = packages.findIndex((pkg) => pkg.id === packageId);
+        if (currentIndex === -1) {
+          cancelPackageTrackingLookup(packageId);
+          return;
+        }
+        const currentPackage = packages[currentIndex];
+        if (!currentPackage.isTrackingPending && attempt > 1) {
+          cancelPackageTrackingLookup(packageId);
+          return;
+        }
+        const currentFingerprint = JSON.stringify({
+          carrier: currentPackage.carrier,
+          params: buildWatchParamsFromPackage(currentPackage),
+        });
+        if (currentFingerprint !== lookupFingerprint) {
+          return;
+        }
+
+        if (!trackingInfo) {
+          if (attempt < TRACKING_LOOKUP_MAX_ATTEMPTS) {
+            schedulePackageTrackingLookup(
+              packageId,
+              attempt + 1,
+              lookupFingerprint
+            );
+            return;
+          }
+
+          packages[currentIndex] = {
+            ...currentPackage,
+            isTrackingPending: false,
+            trackingFetchFailed: true,
+            lastUpdate: currentPackage.lastUpdate || new Date().toISOString(),
+          };
+          savePackagesToLocalStorage();
+          renderPackages();
+          return;
+        }
+
+        const updatedPackage = {
+          ...currentPackage,
+          status: trackingInfo.status.code,
+          description: trackingInfo.status.description,
+          progress: calculateProgress(trackingInfo.status.code),
+          lastUpdate: trackingInfo.status.timestamp || new Date().toISOString(),
+          trackingNumber:
+            trackingInfo.trackingNumber || currentPackage.trackingNumber,
+          trackingUrl: trackingInfo.trackingUrl || currentPackage.trackingUrl,
+          events: Array.isArray(trackingInfo.events) ? trackingInfo.events : [],
+          isTrackingPending: false,
+          trackingFetchFailed: false,
+        };
+
+        packages[currentIndex] = updatedPackage;
+        savePackagesToLocalStorage();
+        renderPackages();
+      }
+
+      async function persistAndRefreshPackageInBackground(
+        packageId,
+        previousTarget = null
+      ) {
+        const packageData = packages.find((pkg) => pkg.id === packageId);
+        if (!packageData) {
+          return;
+        }
+
+        if (hasWatchTargetChanged(previousTarget, packageData)) {
+          await apiService.unwatchTarget(
+            previousTarget.source,
+            previousTarget.params
+          );
+        }
+
+        const watchRegistered = await apiService.watchTarget(
+          packageData.carrier,
+          buildWatchParamsFromPackage(packageData),
+          packageData.friendlyName
+        );
+        if (!watchRegistered) {
+          showToast(
+            "Package saved locally. Scheduler sync will retry automatically.",
+            "info"
+          );
+        }
+
+        cancelPackageTrackingLookup(packageId);
+        void fetchPackageDetailsInBackground(packageId, 1);
+      }
+
+      function resumePendingPackageLookups() {
+        packages
+          .filter((pkg) => pkg.isTrackingPending)
+          .forEach((pkg) => void fetchPackageDetailsInBackground(pkg.id, 1));
+      }
+
+      addPackageForm.addEventListener("submit", (e) => {
         e.preventDefault();
 
         const formData = {
@@ -1039,80 +1285,62 @@
           storedFields[fieldName] = fieldValue;
         });
 
-        try {
-          const trackingInfo = await apiService.getTrackingInfo(
-            formData.carrier,
-            trackingParams
-          );
-          if (!trackingInfo) return;
-
-          if (
-            isDuplicatePackage(
-              trackingInfo.trackingNumber,
-              formData.carrier,
-              currentPackage?.id
-            )
-          ) {
-            showToast("This package has already been added", "error");
-            return;
-          }
-
-          const newPackage = {
-            id: currentPackage
-              ? currentPackage.id
-              : Math.max(0, ...packages.map((p) => p.id)) + 1,
-            friendlyName: formData.friendlyName,
-            carrier: formData.carrier,
-            status: trackingInfo.status.code,
-            description: trackingInfo.status.description,
-            progress: calculateProgress(trackingInfo.status.code),
-            lastUpdate: trackingInfo.status.timestamp,
-            trackingNumber: trackingInfo.trackingNumber,
-            trackingUrl: trackingInfo.trackingUrl,
-            events: trackingInfo.events,
-            requiredFields: storedFields,
-          };
-
-          if (currentPackage) {
-            const index = packages.findIndex((p) => p.id === currentPackage.id);
-            if (index !== -1) {
-              packages[index] = newPackage;
-              showToast("Package updated successfully");
-            }
-          } else {
-            packages.push(newPackage);
-            showToast("Package added successfully");
-            trackUmamiEvent("package_create", {
-              carrier: formData.carrier,
-            });
-          }
-
-          if (
-            previousTarget &&
-            (previousTarget.source !== newPackage.carrier ||
-              JSON.stringify(previousTarget.params) !==
-                JSON.stringify(buildWatchParamsFromPackage(newPackage)))
-          ) {
-            await apiService.unwatchTarget(
-              previousTarget.source,
-              previousTarget.params
-            );
-          }
-
-          await apiService.watchTarget(
-            newPackage.carrier,
-            buildWatchParamsFromPackage(newPackage),
-            newPackage.friendlyName
-          );
-
-          savePackagesToLocalStorage();
-          renderPackages();
-          hideModal(modal);
-          addPackageForm.reset();
-          currentPackage = null;
-        } catch (error) {
-          showToast("Failed to save package", "error");
+        const trackingNumber = getTrackingNumberFromParams(trackingParams);
+        if (!trackingNumber) {
+          showToast("Tracking number is required", "error");
+          return;
         }
+
+        if (
+          isDuplicatePackage(trackingNumber, formData.carrier, currentPackage?.id)
+        ) {
+          showToast("This package has already been added", "error");
+          return;
+        }
+
+        const pendingPackage = {
+          id: currentPackage
+            ? currentPackage.id
+            : Math.max(0, ...packages.map((p) => p.id)) + 1,
+          friendlyName: formData.friendlyName,
+          carrier: formData.carrier,
+          status: "1",
+          description: "Tracking is scheduled and loading in the background.",
+          progress: calculateProgress("1"),
+          lastUpdate: new Date().toISOString(),
+          trackingNumber,
+          trackingUrl: currentPackage?.trackingUrl || "",
+          events: [],
+          requiredFields: storedFields,
+          isTrackingPending: true,
+          trackingFetchFailed: false,
+        };
+
+        if (currentPackage) {
+          const index = packages.findIndex((p) => p.id === currentPackage.id);
+          if (index !== -1) {
+            packages[index] = pendingPackage;
+            cancelPackageTrackingLookup(pendingPackage.id);
+            showToast("Package updated. Fetching fresh tracking...", "info");
+          }
+        } else {
+          packages.push(pendingPackage);
+          showToast("Package added. Fetching tracking in background...", "info");
+          trackUmamiEvent("package_create", {
+            carrier: formData.carrier,
+          });
+        }
+
+        savePackagesToLocalStorage();
+        renderPackages();
+        hideModal(modal);
+        addPackageForm.reset();
+        currentPackage = null;
+
+        void persistAndRefreshPackageInBackground(
+          pendingPackage.id,
+          previousTarget
+        );
       });
 
       function calculateProgress(status) {
@@ -1272,6 +1500,7 @@
         await checkForPackageImport();
         await syncLocalPackagesToBackend();
         renderPackages();
+        resumePendingPackageLookups();
         updateAnalyticsToggleButton();
 
         if (packages.length > 0) {
@@ -1346,12 +1575,11 @@
             });
             const { friendlyName, carrier, ...additionalFields } = packageData;
             const storedFields = { ...additionalFields };
-            const trackingInfo = await apiService.getTrackingInfo(
-              carrier,
-              additionalFields
-            );
-            if (!trackingInfo) return;
-            if (isDuplicatePackage(trackingInfo.trackingNumber, carrier)) {
+            const trackingNumber = getTrackingNumberFromParams(additionalFields);
+            if (!trackingNumber) {
+              throw new Error("Missing tracking number in import payload");
+            }
+            if (isDuplicatePackage(trackingNumber, carrier)) {
               showToast("This package has already been added", "error");
 
               window.history.replaceState(
@@ -1366,25 +1594,23 @@
               id: Math.max(0, ...packages.map((p) => p.id)) + 1,
               friendlyName,
               carrier,
-              status: trackingInfo.status.code,
-              description: trackingInfo.status.description,
-              progress: calculateProgress(trackingInfo.status.code),
-              lastUpdate: trackingInfo.status.timestamp,
-              trackingNumber: trackingInfo.trackingNumber,
-              trackingUrl: trackingInfo.trackingUrl,
-              events: trackingInfo.events,
+              status: "1",
+              description: "Tracking is scheduled and loading in the background.",
+              progress: calculateProgress("1"),
+              lastUpdate: new Date().toISOString(),
+              trackingNumber,
+              trackingUrl: "",
+              events: [],
               requiredFields: storedFields,
+              isTrackingPending: true,
+              trackingFetchFailed: false,
             };
 
             packages.push(newPackage);
-            await apiService.watchTarget(
-              newPackage.carrier,
-              buildWatchParamsFromPackage(newPackage),
-              newPackage.friendlyName
-            );
             savePackagesToLocalStorage();
             renderPackages();
-            showToast("Package imported successfully");
+            showToast("Package imported. Fetching tracking in background...", "info");
+            void persistAndRefreshPackageInBackground(newPackage.id);
 
             trackUmamiEvent("package_import", {
               carrier: carrier,
@@ -1440,7 +1666,8 @@
               };
               const trackingInfo = await apiService.getTrackingInfo(
                 package.carrier,
-                trackingParams
+                trackingParams,
+                { showErrorToast: false }
               );
               if (trackingInfo) {
                 const updatedPackage = {
@@ -1450,6 +1677,8 @@
                   progress: calculateProgress(trackingInfo.status.code),
                   lastUpdate: trackingInfo.status.timestamp,
                   events: trackingInfo.events,
+                  isTrackingPending: false,
+                  trackingFetchFailed: false,
                 };
                 if (
                   JSON.stringify(updatedPackage) !== JSON.stringify(package)

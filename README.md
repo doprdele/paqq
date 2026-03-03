@@ -1,71 +1,136 @@
 <div align="center">
-<br>
-  <img src="./frontend/logo.svg" alt="Paqq Logo" width="400"/>
-  
-  # Paqq 
-  
-  A playful package tracking platform for monitoring all your shipments in one place
+  <img src="./frontend/logo.svg" alt="Paqq Logo" width="620" />
+
+  # Paqq
+
+  **A playful, self-hostable package tracker fork with USPS + UniUni support and background polling.**
 </div>
 
-> Paqq is a fork of Packt by Paylicier.
+> Paqq is a fork of [Packt](https://github.com/Paylicier/Packt) by Paylicier.
+>
+> "I am a strong defender of vibe coding, because, most likely, vibe coding produces better results than you can."
 
-## Features 
+## What Paqq Adds
 
-###  **Multi-Carrier Support**
-  - DHL
-  - La Poste
-  - Colissimo
-  - Chronopost
-  - Mondial Relay
-  - Asendia
-  - FedEx
-  - USPS
-  - UniUni
-  - Add your own !
-  
-###  **Easy Tracking**
-  - Detailed event history
-  - Location tracking
-  
-###  **Modern (and beautiful) UI**
-  - Dark/Light mode
-  - Responsive design
-  - Clean interface
-  
-###  **Package Sharing**
-  - Generate share links
-  - Import packages from links
-  
-###  **Local Storage**
-  - Offline access
-  - No account needed
-  - Data persistence
+- Rebrand from Packt to **Paqq** with updated UI identity and logo
+- **UniUni** support end-to-end
+- **USPS + UniUni scraping** via Playwright/CDP + stealth hardening
+- **Asynchronous package add flow**:
+  - package is saved immediately
+  - modal closes immediately
+  - tracking fetch runs in background with loading state
+- **Persistent backend scheduler** for self-hosted mode:
+  - watched targets are persisted
+  - polling continues until delivery
+  - delivered targets stop automatic rechecks
+- Fork attribution, notice files, and branding policy for redistribution
 
-###  **Progressive Web App support**
-  - Easy install
-  - Native-like experience
+## Feature Summary
 
-## Setup 
+### Carriers
 
-### Runtime Modes
+- Mondial Relay
+- Asendia
+- Colissimo
+- Chronopost
+- La Poste
+- DHL
+- FedEx
+- USPS
+- UniUni
 
-Paqq backend now supports two runtime adapters:
-- Cloudflare Worker adapter (`backend/src/index.ts`)
-- Node adapter (`backend/src/node.ts`)
+### Tracking UX
 
-Both adapters use the same core request handler (`backend/src/app.ts`).
+- Detailed status/events timeline
+- Share/import tracking links
+- Dark/light mode
+- PWA support
+- Local package persistence in browser
+- Background fetch + retry for newly added packages
 
-### Backend (Cloudflare Worker)
+## Architecture
 
-1. Edit vars in `.dev.vars` (or the production version if using on production)
-2. Install and run the backend
+- `frontend/`: static web app (nginx in self-hosted stack)
+- `backend/`: API + scheduler
+  - Worker adapter (`src/index.ts`)
+  - Node adapter (`src/node.ts`)
+- `usps-scraper/`: Playwright-based scraper service for USPS/UniUni
+
+## Self-Hosted: Quick Start (Docker Compose)
+
+### Prerequisites
+
+- Docker + Docker Compose
+
+### Start
+
 ```bash
-cd backend
-bun install
-bunx wrangler dev
+git clone https://github.com/doprdele/paqq.git
+cd paqq
+docker compose up -d --build
 ```
 
-### Backend (Node Runtime)
+### Endpoints
+
+- Frontend: `http://localhost:8080`
+- Backend API: `http://localhost:8787`
+- Scraper service: `http://localhost:8790`
+
+### Default flow in compose
+
+- Frontend calls backend (`/api/*`)
+- Backend calls scraper for USPS/UniUni
+- Scheduler runs in backend and persists state to `/app/data/tracking-scheduler-state.json`
+
+## Self-Hosted: Configuration
+
+### Frontend runtime config
+
+- `PAQQ_API_BASE_URL` (fallback supported: `PACKT_API_BASE_URL`)
+
+### Backend scheduler env
+
+- `PAQQ_TRACKING_SCHEDULER_ENABLED` (default `true`)
+- `PAQQ_TRACKING_SCHEDULER_INTERVAL_MS` (default `14400000`)
+- `PAQQ_TRACKING_SCHEDULER_RUN_ON_START` (default `true`)
+- `PAQQ_TRACKING_SCHEDULER_STATE_FILE` (default `/app/data/tracking-scheduler-state.json`)
+
+Legacy `PACKT_*` scheduler env vars are still supported for backward compatibility.
+
+### Scraper/Carrier env
+
+- `USPS_SCRAPER_URL` (backend -> scraper URL, default `http://127.0.0.1:8790`)
+- `USPS_SCRAPER_TOKEN` (optional)
+- `USPS_SCRAPER_TIMEOUT_MS` (default `300000`)
+- `USPS_SCRAPE_MAX_ATTEMPTS` (scraper retries, default `10`)
+- `USPS_CDP_WS_ENDPOINT` (optional CDP endpoint)
+
+- `UNIUNI_SCRAPER_URL` (backend -> scraper URL, default `http://127.0.0.1:8790`)
+- `UNIUNI_SCRAPER_TOKEN` (optional)
+- `UNIUNI_SCRAPER_TIMEOUT_MS` (default `300000`)
+- `UNIUNI_SCRAPE_MAX_ATTEMPTS` (scraper retries, default `6`)
+- `UNIUNI_CDP_WS_ENDPOINT` (optional CDP endpoint)
+- `UNIUNI_TRACKING_KEY` (optional override)
+
+## Self-Hosted: Local Configuration / OrbStack
+
+Paqq is deployable through the companion `local-configuration` stack behind shared Traefik + OIDC.
+
+From your `local-configuration` repo:
+
+```bash
+just packt-shared-traefik-orbstack
+```
+
+Current defaults in that stack are already aligned to Paqq:
+
+- repo: `https://github.com/doprdele/paqq.git`
+- host: `paqq.orb.local`
+- API base URL: `https://paqq.orb.local`
+
+## Local Development (Non-Docker)
+
+### Backend
 
 ```bash
 cd backend
@@ -73,9 +138,7 @@ npm install
 npm run start:node
 ```
 
-### Scraper Service (Playwright/CDP)
-
-USPS and UniUni tracking are fetched through a dedicated scraper service (`usps-scraper`) using Playwright + stealth hardening.
+### Scraper
 
 ```bash
 cd usps-scraper
@@ -83,142 +146,73 @@ npm install
 npm run start
 ```
 
-Backend environment variables for USPS:
-- `USPS_SCRAPER_URL` (default `http://127.0.0.1:8790`)
-- `USPS_SCRAPER_TOKEN` (optional shared secret, sent as `x-usps-scraper-token`)
-- `USPS_SCRAPER_TIMEOUT_MS` (optional request timeout, default `300000`)
-
-Backend environment variables for UniUni:
-- `UNIUNI_SCRAPER_URL` (default `http://127.0.0.1:8790`)
-- `UNIUNI_SCRAPER_TOKEN` (optional shared secret, sent as `x-uniuni-scraper-token`)
-- `UNIUNI_SCRAPER_TIMEOUT_MS` (optional request timeout, default `300000`)
-
-USPS scraper environment variables:
-- `USPS_SCRAPE_MAX_ATTEMPTS` (optional retries, default `10`)
-- `USPS_CDP_WS_ENDPOINT` (optional CDP endpoint used by scraper via `connectOverCDP`)
-
-UniUni scraper environment variables:
-- `UNIUNI_SCRAPE_MAX_ATTEMPTS` (optional retries, default `6`)
-- `UNIUNI_CDP_WS_ENDPOINT` (optional CDP endpoint used by scraper via `connectOverCDP`)
-- `UNIUNI_TRACKING_KEY` (optional override for UniUni's page-injected tracking key)
-
-Live tracking test commands:
-- `cd usps-scraper && npm run test:live` (USPS live tracking)
-- `cd usps-scraper && npm run test:live:uniuni` (UniUni live tracking)
-- `cd backend && npm run test:live:uniuni` (Paqq backend live test via scraper service)
-
-Backend scheduler environment variables (self-hosted Node runtime):
-- `PAQQ_TRACKING_SCHEDULER_ENABLED` (default `true`)
-- `PAQQ_TRACKING_SCHEDULER_INTERVAL_MS` (default `14400000`, i.e. 4 hours)
-- `PAQQ_TRACKING_SCHEDULER_RUN_ON_START` (default `true`)
-- `PAQQ_TRACKING_SCHEDULER_STATE_FILE` (default `/app/data/tracking-scheduler-state.json`)
-
-The backend scheduler is serialized: only one scheduler run executes at a time.
-Watched packages and latest tracking snapshots are persisted in `PAQQ_TRACKING_SCHEDULER_STATE_FILE`.
-Scheduler polling now continues until a package is delivered, then pauses automatic rechecks for that package.
-
-Legacy `PACKT_*` scheduler variables are still supported for backward compatibility.
-
 ### Frontend
-By default the frontend uses `https://packt.notri1.workers.dev`.
 
-For self-hosting, configure `frontend/runtime-config.js`:
-- `API_BASE_URL`
+Serve `frontend/` with any static server and point runtime config at your backend.
 
-### Docker Compose (Self-Hosted)
+## Tests
 
-This repository includes a self-host stack:
-- `frontend` (nginx)
-- `backend` (Node adapter)
-- `usps-scraper` (Playwright + stealth for USPS + UniUni)
+### Backend tests
 
-Run:
 ```bash
-docker compose up -d --build
+cd backend
+npm test
+npm run test:integration
+npm run test:live:uniuni
 ```
 
-Endpoints:
-- Frontend: `http://localhost:8080`
-- Backend API: `http://localhost:8787`
-- Scraper service: `http://localhost:8790`
+### Scraper tests
 
-Optional environment overrides:
-- `PAQQ_API_BASE_URL` (frontend runtime config; default empty in compose, so nginx proxies `/api` to backend)
-- `USPS_SCRAPER_TOKEN`
-- `USPS_SCRAPER_TIMEOUT_MS`
-- `USPS_SCRAPE_MAX_ATTEMPTS`
-- `UNIUNI_SCRAPER_TOKEN`
-- `UNIUNI_SCRAPER_TIMEOUT_MS`
-- `UNIUNI_SCRAPE_MAX_ATTEMPTS`
-- `UNIUNI_TRACKING_KEY`
-- `PAQQ_TRACKING_SCHEDULER_ENABLED`
-- `PAQQ_TRACKING_SCHEDULER_INTERVAL_MS`
-- `PAQQ_TRACKING_SCHEDULER_RUN_ON_START`
-- `PAQQ_TRACKING_SCHEDULER_STATE_FILE`
-
-## API Documentation 
-
-The backend API provides endpoints for:
-- `/api/list` - Get list of supported carriers
-
-Response:
-```json
-[
-  {
-    "name": "string",
-    "icon": "string",
-    "requiredFields": ["string"]
-  }
-]
-```
-- `/api/get` - Get tracking information
-
-Response:
-```json
-{
-  "trackingNumber": "string",
-  "trackingUrl": "string",
-  "carrier": "string",
-  "status": {
-    "code": "string",
-    "description": "string",
-    "timestamp": "string",
-    "location": "string"
-  },
-  "estimatedDelivery": "string",
-  "events": [
-    {
-      "code": "string",
-      "description": "string",
-      "timestamp": "string",
-      "location": "string"
-    }
-  ]
-}
+```bash
+cd usps-scraper
+npm test
+npm run test:live
+npm run test:live:uniuni
+npm run test:live:all
 ```
 
+## API
 
-## Contributing 
+### `GET /api/list`
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+Returns supported carriers and required fields.
 
-## License
+### `GET /api/get?source=<carrier>&trackingNumber=<id>`
 
-This fork includes code from Packt by Paylicier, and all original MPL notices are preserved.
+Returns normalized tracking payload:
+
+- `trackingNumber`
+- `trackingUrl`
+- `carrier`
+- `status { code, description, timestamp, location }`
+- `estimatedDelivery`
+- `events[]`
+
+### Scheduler endpoints (Node runtime)
+
+- `GET /api/scheduler/status`
+- `GET /api/scheduler/targets`
+- `POST /api/scheduler/watch`
+- `POST /api/scheduler/unwatch`
+
+## Fork Attribution
+
+- Original project: [Paylicier/Packt](https://github.com/Paylicier/Packt)
+- Fork/project: [doprdele/paqq](https://github.com/doprdele/paqq)
+- Maintainer of this fork: Evan Sarmiento
+
+## License and Notices
+
+This fork includes code from Packt by Paylicier, and original notices are preserved.
 
 - Upstream/inherited code: **MPL-2.0** (`LICENSE`)
 - Additional distribution in this fork: **AGPL-3.0-or-later** (`LICENSE-AGPL-3.0.txt`) where MPL secondary-license terms allow it
-- Attribution and provenance: `NOTICE.md`
-- Branding restrictions for this fork name/logo: `TRADEMARKS.md`
-
-You must keep attribution notices intact when redistributing this project.
+- Attribution/provenance: `NOTICE.md`
+- Branding/trademark policy: `TRADEMARKS.md`
 
 ---
 
 <div align="center">
-  Paqq by Evan Sarmiento • original Packt by Paylicier
+  <img src="./frontend/logo.svg" alt="Paqq Logo" width="520" />
+  <p><strong>Paqq by Evan Sarmiento</strong> • forked from Packt by Paylicier</p>
 </div>

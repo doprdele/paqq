@@ -1,5 +1,6 @@
 import { handleList } from './handlers/list';
 import { handleGet } from './handlers/get';
+import { handleAmazonImport } from './handlers/amazon-import';
 import { sourcesRegistry } from './sources';
 import type { TrackingScheduler } from './scheduler';
 import {
@@ -55,6 +56,10 @@ export async function handleRequest(
 
   if (url.pathname === '/api/get') {
     return handleGet(request, runtimeEnv, services.scheduler);
+  }
+
+  if (url.pathname === '/api/amazon/import' && request.method === 'POST') {
+    return handleAmazonImport(request, runtimeEnv);
   }
 
   if (url.pathname === '/api/settings/schema' && request.method === 'GET') {

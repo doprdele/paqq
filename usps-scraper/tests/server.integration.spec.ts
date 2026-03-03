@@ -12,6 +12,7 @@ async function startServer(
     usps: Parameters<typeof createScraperServer>[0]["usps"];
     uniuni: Parameters<typeof createScraperServer>[0]["uniuni"];
     ups: Parameters<typeof createScraperServer>[0]["ups"];
+    amazonImport: Parameters<typeof createScraperServer>[0]["amazonImport"];
   }
 ): Promise<RunningServer> {
   const server = createScraperServer(handlers);
@@ -35,6 +36,7 @@ afterEach(async () => {
   delete process.env.USPS_SCRAPER_TOKEN;
   delete process.env.UNIUNI_SCRAPER_TOKEN;
   delete process.env.UPS_SCRAPER_TOKEN;
+  delete process.env.AMAZON_SCRAPER_TOKEN;
 
   while (cleanupTasks.length > 0) {
     const task = cleanupTasks.pop();
@@ -68,6 +70,7 @@ describe("scraper server routing", () => {
       usps: vi.fn(),
       uniuni: vi.fn(),
       ups,
+      amazonImport: vi.fn(),
     });
     cleanupTasks.push(server.close);
 
@@ -118,6 +121,7 @@ describe("scraper server routing", () => {
       usps,
       uniuni: vi.fn(),
       ups: vi.fn(),
+      amazonImport: vi.fn(),
     });
     cleanupTasks.push(server.close);
 
@@ -133,5 +137,53 @@ describe("scraper server routing", () => {
     expect(responseA.status).toBe(200);
     expect(responseB.status).toBe(200);
     expect(usps).toHaveBeenCalledTimes(2);
+  });
+
+  it("routes /amazon/import and enforces Amazon token when configured", async () => {
+    process.env.AMAZON_SCRAPER_TOKEN = "amazon-secret";
+    const amazonImport = vi.fn().mockResolvedValue({
+      status: "totp_required",
+      challengeId: "challenge-123",
+      expiresAt: "2026-03-03T20:00:00.000Z",
+    });
+
+    const server = await startServer({
+      usps: vi.fn(),
+      uniuni: vi.fn(),
+      ups: vi.fn(),
+      amazonImport,
+    });
+    cleanupTasks.push(server.close);
+
+    const unauthorized = await fetch(`${server.baseUrl}/amazon/import`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        username: "user@example.com",
+        password: "secret",
+      }),
+    });
+    expect(unauthorized.status).toBe(401);
+
+    const authorized = await fetch(`${server.baseUrl}/amazon/import`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-amazon-scraper-token": "amazon-secret",
+      },
+      body: JSON.stringify({
+        username: "user@example.com",
+        password: "secret",
+        maxShipments: 12,
+      }),
+    });
+
+    expect(authorized.status).toBe(202);
+    expect(amazonImport).toHaveBeenCalledTimes(1);
+    expect(amazonImport.mock.calls[0][0]).toEqual({
+      username: "user@example.com",
+      password: "secret",
+      maxShipments: 12,
+    });
   });
 });

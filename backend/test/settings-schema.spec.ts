@@ -50,6 +50,7 @@ describe("settings schema", () => {
         dhl: { apiKey: "dhl-key" },
         fedex: { clientId: "fedex-id", clientSecret: "fedex-secret" },
         ups: { scraperToken: "ups-token" },
+        amazon: { scraperToken: "amazon-token" },
       },
     });
 
@@ -61,6 +62,7 @@ describe("settings schema", () => {
     expect(env.FEDEX_API_KEY).toBe("fedex-id");
     expect(env.FEDEX_SECRET_KEY).toBe("fedex-secret");
     expect(env.UPS_SCRAPER_TOKEN).toBe("ups-token");
+    expect(env.AMAZON_SCRAPER_TOKEN).toBe("amazon-token");
   });
 
   it("parses persisted settings and falls back to defaults", () => {

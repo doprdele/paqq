@@ -10,7 +10,7 @@
     "start:node": "tsx src/node.ts",
     "deploy": "wrangler publish",
     "test": "vitest run",
-    "test:integration": "vitest run test/usps.integration.test.ts test/uniuni.integration.test.ts test/ups.integration.test.ts",
+    "test:integration": "vitest run test/usps.integration.test.ts test/uniuni.integration.test.ts test/ups.integration.test.ts test/amazon.import.integration.test.ts",
     "test:live:uniuni": "RUN_LIVE_UNIUNI_BACKEND_TESTS=1 vitest run test/live.uniuni.integration.test.ts",
     "test:live:ups": "RUN_LIVE_UPS_BACKEND_TESTS=1 vitest run test/live.ups.integration.test.ts"
   },

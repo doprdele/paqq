@@ -108,6 +108,19 @@ export const CARRIER_CREDENTIAL_SCHEMAS: CarrierCredentialSchema[] = [
       },
     ],
   },
+  {
+    carrier: "amazon",
+    title: "Amazon Scraper",
+    description: "Optional token for securing Amazon import scraper requests.",
+    fields: [
+      {
+        key: "scraperToken",
+        label: "Amazon scraper token",
+        envKey: "AMAZON_SCRAPER_TOKEN",
+        secret: true,
+      },
+    ],
+  },
 ];
 
 const CARRIER_SCHEMA_BY_NAME = new Map(

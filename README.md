@@ -3,7 +3,7 @@
 
   # Paqq
 
-  **A playful, self-hostable package tracker fork with USPS + UniUni + UPS support and background polling.**
+  **A playful, self-hostable package tracker fork with USPS + UniUni + UPS + Amazon import support and background polling.**
 
   Website: **https://doprdele.github.io/paqq/**
 </div>
@@ -17,6 +17,7 @@
 - Paqq-first naming and branding across the stack
 - **UniUni** support end-to-end
 - **USPS + UniUni + UPS scraping** via Playwright/CDP + stealth hardening
+- **Amazon order import scraper** with username/password + optional TOTP
 - **Asynchronous package add flow**:
   - package is saved immediately
   - modal closes immediately
@@ -44,6 +45,7 @@
 - UPS
 - USPS
 - UniUni
+- Amazon (import flow)
 
 ### Tracking UX
 
@@ -60,7 +62,7 @@
 - `backend/`: API + scheduler
   - Worker adapter (`src/index.ts`)
   - Node adapter (`src/node.ts`)
-- `usps-scraper/`: Playwright-based scraper service for USPS/UniUni/UPS
+- `usps-scraper/`: Playwright-based scraper service for USPS/UniUni/UPS + Amazon import
 
 ## Self-Hosted: Quick Start (Docker Compose)
 
@@ -85,7 +87,7 @@ docker compose up -d --build
 ### Default flow in compose
 
 - Frontend calls backend (`/api/*`)
-- Backend calls scraper for USPS/UniUni/UPS
+- Backend calls scraper for USPS/UniUni/UPS/Amazon import
 - Scheduler runs in backend and persists state to `/app/data/tracking-scheduler-state.json`
 
 ## Self-Hosted: Configuration
@@ -124,6 +126,12 @@ docker compose up -d --build
 - `UPS_SCRAPER_TIMEOUT_MS` (default `300000`)
 - `UPS_SCRAPE_MAX_ATTEMPTS` (scraper retries, default `5`)
 - `UPS_CDP_WS_ENDPOINT` (optional CDP endpoint)
+
+- `AMAZON_SCRAPER_URL` (backend -> scraper URL, default `http://127.0.0.1:8790`)
+- `AMAZON_SCRAPER_TOKEN` (optional)
+- `AMAZON_SCRAPER_TIMEOUT_MS` (backend timeout, default `300000`)
+- `AMAZON_IMPORT_TIMEOUT_MS` (scraper timeout, default `60000`)
+- `AMAZON_CDP_WS_ENDPOINT` (optional CDP endpoint)
 
 ## Self-Hosted: Local Configuration / OrbStack
 
@@ -202,6 +210,13 @@ Returns normalized tracking payload:
 - `status { code, description, timestamp, location }`
 - `estimatedDelivery`
 - `events[]`
+
+### `POST /api/amazon/import`
+
+Imports recent Amazon shipments and invoice artifacts. Supports two-step auth:
+
+- Request 1: `username`, `password`, optional `maxShipments`, `lookbackDays`, `archiveDelivered`
+- If `status === "totp_required"`: Request 2 with `challengeId` + `totpCode`
 
 ### Scheduler endpoints (Node runtime)
 

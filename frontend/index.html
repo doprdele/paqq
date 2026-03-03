@@ -270,6 +270,151 @@
               </button>
             </div>
           </form>
+          <section
+            id="amazonImportSection"
+            class="mt-6 border-t border-coffee/20 dark:border-gray-700 pt-4"
+          >
+            <button
+              type="button"
+              id="amazonImportToggle"
+              class="w-full text-left px-3 py-2 rounded-md bg-coffee/10 dark:bg-coffee-light/10 text-coffee-dark dark:text-coffee-light font-semibold hover:bg-coffee/20 dark:hover:bg-coffee-light/20 transition-colors duration-200"
+            >
+              <i class="fas fa-box-open mr-2"></i>
+              Import Amazon Shipments
+            </button>
+            <div
+              id="amazonImportPanel"
+              class="hidden mt-3 rounded-md border border-coffee/20 dark:border-gray-700 p-3 space-y-3"
+            >
+              <p class="text-xs text-gray-600 dark:text-gray-300">
+                Sign in to Amazon and import recent shipments. If Amazon asks
+                for TOTP, this modal stays open so you can complete verification.
+              </p>
+              <div>
+                <label
+                  for="amazonUsername"
+                  class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                >
+                  Amazon username/email
+                </label>
+                <input
+                  type="text"
+                  id="amazonUsername"
+                  autocomplete="username"
+                  class="w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-coffee dark:focus:border-coffee-light focus:ring-coffee dark:focus:ring-coffee-light transition-colors duration-200"
+                />
+              </div>
+              <div>
+                <label
+                  for="amazonPassword"
+                  class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                >
+                  Amazon password
+                </label>
+                <input
+                  type="password"
+                  id="amazonPassword"
+                  autocomplete="current-password"
+                  class="w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-coffee dark:focus:border-coffee-light focus:ring-coffee dark:focus:ring-coffee-light transition-colors duration-200"
+                />
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label
+                    for="amazonMaxShipments"
+                    class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
+                    Max shipments
+                  </label>
+                  <input
+                    type="number"
+                    id="amazonMaxShipments"
+                    min="1"
+                    max="75"
+                    value="15"
+                    class="w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-coffee dark:focus:border-coffee-light focus:ring-coffee dark:focus:ring-coffee-light transition-colors duration-200"
+                  />
+                </div>
+                <div>
+                  <label
+                    for="amazonLookbackDays"
+                    class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
+                    Lookback days
+                  </label>
+                  <input
+                    type="number"
+                    id="amazonLookbackDays"
+                    min="1"
+                    max="365"
+                    value="30"
+                    class="w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-coffee dark:focus:border-coffee-light focus:ring-coffee dark:focus:ring-coffee-light transition-colors duration-200"
+                  />
+                </div>
+              </div>
+              <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  id="amazonArchiveDelivered"
+                  checked
+                  class="h-4 w-4 rounded border-gray-300 text-coffee focus:ring-coffee"
+                />
+                Skip delivered shipments (archive delivered by default)
+              </label>
+              <div id="amazonTotpRow" class="hidden">
+                <label
+                  for="amazonTotpCode"
+                  class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                >
+                  TOTP code
+                </label>
+                <input
+                  type="text"
+                  id="amazonTotpCode"
+                  inputmode="numeric"
+                  autocomplete="one-time-code"
+                  maxlength="12"
+                  placeholder="123456"
+                  class="w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm p-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:border-coffee dark:focus:border-coffee-light focus:ring-coffee dark:focus:ring-coffee-light transition-colors duration-200"
+                />
+              </div>
+              <p
+                id="amazonImportStatus"
+                class="text-xs text-gray-600 dark:text-gray-300 hidden"
+              ></p>
+              <div id="amazonImportLoader" class="hidden">
+                <div class="paqq-loading-chip">
+                  <span class="paqq-loading-dots" aria-hidden="true">
+                    <span></span><span></span><span></span>
+                  </span>
+                  <span>Importing Amazon shipments...</span>
+                </div>
+              </div>
+              <div class="flex justify-end gap-2">
+                <button
+                  type="button"
+                  id="amazonImportCancelBtn"
+                  class="px-3 py-2 text-sm bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-md hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors duration-200"
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  id="amazonImportStartBtn"
+                  class="px-3 py-2 text-sm bg-coffee text-white rounded-md hover:bg-coffee-dark transition-colors duration-200"
+                >
+                  Import Shipments
+                </button>
+                <button
+                  type="button"
+                  id="amazonImportSubmitTotpBtn"
+                  class="hidden px-3 py-2 text-sm bg-coffee text-white rounded-md hover:bg-coffee-dark transition-colors duration-200"
+                >
+                  Submit TOTP
+                </button>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
     </div>
@@ -541,6 +686,17 @@
             { key: "scraperToken", label: "UPS scraper token", secret: true },
           ],
         },
+        {
+          carrier: "amazon",
+          title: "Amazon Scraper",
+          fields: [
+            {
+              key: "scraperToken",
+              label: "Amazon scraper token",
+              secret: true,
+            },
+          ],
+        },
       ];
 
       function sanitizeHTML(text) {
@@ -671,7 +827,36 @@
       }
 
       function savePackagesToLocalStorage() {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(packages));
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(packages));
+        } catch (error) {
+          const fallbackPackages = packages.map((pkg) => {
+            if (!pkg?.invoice?.pdfBase64) {
+              return pkg;
+            }
+            return {
+              ...pkg,
+              invoice: {
+                ...pkg.invoice,
+                pdfBase64: undefined,
+                pdfUnavailableReason:
+                  "Stored without embedded PDF (browser storage limit).",
+              },
+            };
+          });
+
+          try {
+            packages = fallbackPackages;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(packages));
+            showToast(
+              "Saved packages, but PDF invoices were trimmed due to storage limits.",
+              "info"
+            );
+          } catch (fallbackError) {
+            console.error("Failed to persist packages:", fallbackError);
+            showToast("Failed to persist packages locally", "error");
+          }
+        }
       }
 
       function loadPackagesFromLocalStorage() {
@@ -790,6 +975,9 @@
 
       async function syncLocalPackagesToBackend() {
         for (const packageData of packages) {
+          if (packageData.carrier === "amazon") {
+            continue;
+          }
           try {
             await apiService.watchTarget(
               packageData.carrier,
@@ -806,6 +994,8 @@
       let settingsState = loadSettingsFallback();
       let settingsSchema = DEFAULT_CREDENTIAL_SCHEMA;
       let recheckInProgress = false;
+      let amazonImportChallengeId = null;
+      let amazonImportInProgress = false;
       const TRACKING_LOOKUP_MAX_ATTEMPTS = 6;
       const TRACKING_LOOKUP_RETRY_MS = 6000;
       const trackingLookupTimers = new Map();
@@ -841,6 +1031,39 @@
               showToast("Failed to fetch tracking information", "error");
             }
             return null;
+          }
+        },
+
+        async importAmazonShipments(payload) {
+          try {
+            const response = await fetch(`${API_BASE_URL}/api/amazon/import`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+
+            const body = await response
+              .json()
+              .catch(() => ({ error: "Amazon import returned invalid JSON" }));
+
+            if (!response.ok && response.status !== 202) {
+              return {
+                ok: false,
+                error: body.error || "Amazon import failed",
+              };
+            }
+
+            return {
+              ok: true,
+              status: response.status,
+              body,
+            };
+          } catch (error) {
+            console.error("Error importing Amazon shipments:", error);
+            return {
+              ok: false,
+              error: "Failed to import Amazon shipments",
+            };
           }
         },
 
@@ -1190,6 +1413,8 @@
           addPackageCard.addEventListener("click", () => {
             currentPackage = null;
             document.getElementById("addPackageForm").reset();
+            resetAmazonImportPanel({ clearCredentials: true });
+            amazonImportPanel.classList.add("hidden");
             showModal(document.getElementById("addPackageModal"));
           });
         }
@@ -1257,8 +1482,320 @@
       const sendTestNotificationBtn = document.getElementById(
         "sendTestNotificationBtn"
       );
+      const amazonImportToggle = document.getElementById("amazonImportToggle");
+      const amazonImportPanel = document.getElementById("amazonImportPanel");
+      const amazonImportStatus = document.getElementById("amazonImportStatus");
+      const amazonImportLoader = document.getElementById("amazonImportLoader");
+      const amazonImportStartBtn = document.getElementById("amazonImportStartBtn");
+      const amazonImportSubmitTotpBtn = document.getElementById(
+        "amazonImportSubmitTotpBtn"
+      );
+      const amazonImportCancelBtn = document.getElementById("amazonImportCancelBtn");
+      const amazonTotpRow = document.getElementById("amazonTotpRow");
+      const amazonUsernameInput = document.getElementById("amazonUsername");
+      const amazonPasswordInput = document.getElementById("amazonPassword");
+      const amazonTotpInput = document.getElementById("amazonTotpCode");
+      const amazonMaxShipmentsInput = document.getElementById(
+        "amazonMaxShipments"
+      );
+      const amazonLookbackDaysInput = document.getElementById("amazonLookbackDays");
+      const amazonArchiveDeliveredInput = document.getElementById(
+        "amazonArchiveDelivered"
+      );
       let currentPackage = null;
       let activeSettingsTab = "notifications";
+
+      function setAmazonImportStatus(message = "", type = "info") {
+        if (!message) {
+          amazonImportStatus.textContent = "";
+          amazonImportStatus.classList.add("hidden");
+          amazonImportStatus.classList.remove(
+            "text-red-600",
+            "dark:text-red-400",
+            "text-emerald-700",
+            "dark:text-emerald-300",
+            "text-gray-600",
+            "dark:text-gray-300"
+          );
+          return;
+        }
+
+        amazonImportStatus.classList.remove("hidden");
+        amazonImportStatus.classList.remove(
+          "text-red-600",
+          "dark:text-red-400",
+          "text-emerald-700",
+          "dark:text-emerald-300",
+          "text-gray-600",
+          "dark:text-gray-300"
+        );
+
+        if (type === "error") {
+          amazonImportStatus.classList.add("text-red-600", "dark:text-red-400");
+        } else if (type === "success") {
+          amazonImportStatus.classList.add(
+            "text-emerald-700",
+            "dark:text-emerald-300"
+          );
+        } else {
+          amazonImportStatus.classList.add("text-gray-600", "dark:text-gray-300");
+        }
+
+        amazonImportStatus.textContent = message;
+      }
+
+      function setAmazonImportBusy(isBusy, loadingLabel = "") {
+        amazonImportInProgress = Boolean(isBusy);
+        amazonImportStartBtn.disabled = amazonImportInProgress;
+        amazonImportSubmitTotpBtn.disabled = amazonImportInProgress;
+        amazonImportCancelBtn.disabled = amazonImportInProgress;
+        amazonImportToggle.disabled = amazonImportInProgress;
+        if (amazonImportInProgress) {
+          amazonImportLoader.classList.remove("hidden");
+          if (loadingLabel) {
+            const label = amazonImportLoader.querySelector("span:last-child");
+            if (label) {
+              label.textContent = loadingLabel;
+            }
+          }
+          return;
+        }
+        amazonImportLoader.classList.add("hidden");
+      }
+
+      function resetAmazonImportPanel(options = {}) {
+        const clearCredentials = options.clearCredentials ?? true;
+        amazonImportChallengeId = null;
+        amazonTotpRow.classList.add("hidden");
+        amazonImportSubmitTotpBtn.classList.add("hidden");
+        amazonImportStartBtn.classList.remove("hidden");
+        amazonTotpInput.value = "";
+        setAmazonImportStatus();
+        setAmazonImportBusy(false);
+
+        if (clearCredentials) {
+          amazonUsernameInput.value = "";
+          amazonPasswordInput.value = "";
+        }
+      }
+
+      function normalizeAmazonShipmentCarrier(shipmentCarrier) {
+        const normalized = String(shipmentCarrier || "")
+          .trim()
+          .toLowerCase();
+        if (["ups", "usps", "uniuni"].includes(normalized)) {
+          return normalized;
+        }
+        return "amazon";
+      }
+
+      function buildAmazonPackageFromShipment(shipment) {
+        const statusCode = String(shipment?.status?.code || "1");
+        const orderId =
+          typeof shipment?.orderId === "string" ? shipment.orderId : "order";
+        const shipmentId =
+          typeof shipment?.shipmentId === "string"
+            ? shipment.shipmentId
+            : "shipment";
+        const trackingNumber =
+          typeof shipment?.trackingNumber === "string" &&
+          shipment.trackingNumber.trim().length > 0
+            ? shipment.trackingNumber.trim()
+            : `${orderId}-${shipmentId}`;
+
+        const carrier = normalizeAmazonShipmentCarrier(shipment?.carrier);
+        const invoice =
+          shipment?.invoice && typeof shipment.invoice === "object"
+            ? {
+                filename:
+                  typeof shipment.invoice.filename === "string"
+                    ? shipment.invoice.filename
+                    : `amazon-${orderId}-${shipmentId}.pdf`,
+                json:
+                  shipment.invoice.json && typeof shipment.invoice.json === "object"
+                    ? shipment.invoice.json
+                    : {},
+                pdfBase64:
+                  typeof shipment.invoice.pdfBase64 === "string"
+                    ? shipment.invoice.pdfBase64
+                    : undefined,
+              }
+            : undefined;
+
+        return {
+          id: Math.max(0, ...packages.map((pkg) => pkg.id || 0)) + 1,
+          friendlyName: `Amazon ${orderId}`,
+          carrier,
+          status: statusCode,
+          description:
+            shipment?.status?.description ||
+            "Imported from Amazon order history.",
+          progress: calculateProgress(statusCode),
+          lastUpdate:
+            shipment?.status?.timestamp || new Date().toISOString(),
+          trackingNumber,
+          trackingUrl:
+            shipment?.trackingUrl ||
+            "https://www.amazon.com/gp/your-account/order-history",
+          events: Array.isArray(shipment?.events) ? shipment.events : [],
+          requiredFields: {},
+          isTrackingPending: false,
+          trackingFetchFailed: false,
+          amazonOrderId: orderId,
+          amazonShipmentId: shipmentId,
+          invoice,
+        };
+      }
+
+      async function addImportedAmazonShipments(shipments) {
+        let addedCount = 0;
+        let updatedCount = 0;
+        const importedIds = [];
+
+        for (const shipment of shipments) {
+          const importedPackage = buildAmazonPackageFromShipment(shipment);
+          const existingIndex = packages.findIndex(
+            (pkg) =>
+              pkg.carrier === importedPackage.carrier &&
+              pkg.trackingNumber === importedPackage.trackingNumber
+          );
+
+          if (existingIndex >= 0) {
+            packages[existingIndex] = {
+              ...packages[existingIndex],
+              ...importedPackage,
+              id: packages[existingIndex].id,
+              friendlyName:
+                packages[existingIndex].friendlyName ||
+                importedPackage.friendlyName,
+            };
+            importedIds.push(packages[existingIndex].id);
+            updatedCount += 1;
+          } else {
+            packages.push(importedPackage);
+            importedIds.push(importedPackage.id);
+            addedCount += 1;
+          }
+        }
+
+        savePackagesToLocalStorage();
+        renderPackages();
+
+        for (const packageId of importedIds) {
+          const pkg = packages.find((entry) => entry.id === packageId);
+          if (!pkg || pkg.carrier === "amazon") {
+            continue;
+          }
+          void persistAndRefreshPackageInBackground(packageId);
+        }
+
+        return { addedCount, updatedCount };
+      }
+
+      function readAmazonImportConfigPayload() {
+        return {
+          username: amazonUsernameInput.value.trim(),
+          password: amazonPasswordInput.value,
+          maxShipments: Number(amazonMaxShipmentsInput.value || 15),
+          lookbackDays: Number(amazonLookbackDaysInput.value || 30),
+          archiveDelivered: amazonArchiveDeliveredInput.checked,
+        };
+      }
+
+      async function runAmazonImport(payload, loadingLabel) {
+        if (amazonImportInProgress) {
+          return;
+        }
+
+        setAmazonImportBusy(true, loadingLabel);
+        const result = await apiService.importAmazonShipments(payload);
+        setAmazonImportBusy(false);
+
+        if (!result.ok) {
+          setAmazonImportStatus(result.error || "Amazon import failed", "error");
+          showToast(result.error || "Amazon import failed", "error");
+          return;
+        }
+
+        const responseBody = result.body || {};
+        if (responseBody.status === "totp_required") {
+          amazonImportChallengeId = responseBody.challengeId;
+          amazonTotpRow.classList.remove("hidden");
+          amazonImportStartBtn.classList.add("hidden");
+          amazonImportSubmitTotpBtn.classList.remove("hidden");
+          setAmazonImportStatus(
+            "Amazon requested TOTP. Enter your current code to continue.",
+            "info"
+          );
+          amazonTotpInput.focus();
+          return;
+        }
+
+        if (responseBody.status !== "completed") {
+          setAmazonImportStatus("Amazon import returned an unexpected response.", "error");
+          return;
+        }
+
+        const shipments = Array.isArray(responseBody.shipments)
+          ? responseBody.shipments
+          : [];
+        const { addedCount, updatedCount } = await addImportedAmazonShipments(
+          shipments
+        );
+        setAmazonImportStatus(
+          `Import complete: ${addedCount} added, ${updatedCount} refreshed.`,
+          "success"
+        );
+        showToast(
+          `Amazon import complete: ${addedCount} added, ${updatedCount} refreshed.`,
+          "success"
+        );
+        resetAmazonImportPanel({ clearCredentials: true });
+        hideModal(modal);
+      }
+
+      amazonImportToggle.addEventListener("click", () => {
+        amazonImportPanel.classList.toggle("hidden");
+      });
+      amazonImportCancelBtn.addEventListener("click", () => {
+        resetAmazonImportPanel({ clearCredentials: true });
+      });
+      amazonImportStartBtn.addEventListener("click", async () => {
+        const payload = readAmazonImportConfigPayload();
+        if (!payload.username || !payload.password) {
+          setAmazonImportStatus(
+            "Amazon username and password are required to start import.",
+            "error"
+          );
+          return;
+        }
+
+        await runAmazonImport(payload, "Signing in to Amazon...");
+      });
+      amazonImportSubmitTotpBtn.addEventListener("click", async () => {
+        if (!amazonImportChallengeId) {
+          setAmazonImportStatus(
+            "TOTP session expired. Start the import again.",
+            "error"
+          );
+          resetAmazonImportPanel({ clearCredentials: false });
+          return;
+        }
+
+        const code = amazonTotpInput.value.trim();
+        if (!code) {
+          setAmazonImportStatus("Enter your TOTP code.", "error");
+          return;
+        }
+
+        await runAmazonImport(
+          {
+            challengeId: amazonImportChallengeId,
+            totpCode: code,
+          },
+          "Verifying TOTP and importing shipments..."
+        );
+      });
 
       function setActiveSettingsTab(nextTab) {
         activeSettingsTab = nextTab;
@@ -1473,6 +2010,53 @@
             </div>
         </div>`;
 
+        const hasInvoiceJson =
+          package.invoice &&
+          typeof package.invoice === "object" &&
+          package.invoice.json &&
+          typeof package.invoice.json === "object";
+        const hasInvoicePdf =
+          package.invoice &&
+          typeof package.invoice === "object" &&
+          typeof package.invoice.pdfBase64 === "string" &&
+          package.invoice.pdfBase64.length > 0;
+
+        const invoiceHTML = hasInvoiceJson || hasInvoicePdf
+          ? `
+        <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-semibold mb-3 dark:text-white">Invoices</h3>
+            <div class="flex flex-wrap gap-2">
+                ${
+                  hasInvoiceJson
+                    ? `
+                      <button
+                        type="button"
+                        id="downloadInvoiceJsonBtn"
+                        class="px-3 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-700 transition-colors duration-200"
+                      >
+                        <i class="fas fa-file-code mr-2"></i>Download JSON
+                      </button>
+                    `
+                    : ""
+                }
+                ${
+                  hasInvoicePdf
+                    ? `
+                      <button
+                        type="button"
+                        id="downloadInvoicePdfBtn"
+                        class="px-3 py-2 rounded-md bg-green-600 text-white text-sm hover:bg-green-700 transition-colors duration-200"
+                      >
+                        <i class="fas fa-file-pdf mr-2"></i>Download PDF
+                      </button>
+                    `
+                    : ""
+                }
+            </div>
+        </div>
+    `
+          : "";
+
         const eventsHTML = sanitizedData.events.length
           ? `
         <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
@@ -1530,7 +2114,7 @@
     `
           : "";
 
-        content.innerHTML = detailsHTML + eventsHTML;
+        content.innerHTML = detailsHTML + invoiceHTML + eventsHTML;
         showModal(packageDetailsModal);
 
         if (package.events && package.events.length > 0) {
@@ -1587,7 +2171,9 @@
 
       async function deletePackage(packageData) {
         const watchParams = buildWatchParamsFromPackage(packageData);
-        await apiService.unwatchTarget(packageData.carrier, watchParams);
+        if (packageData.carrier !== "amazon") {
+          await apiService.unwatchTarget(packageData.carrier, watchParams);
+        }
         cancelPackageTrackingLookup(packageData.id);
 
         packages = packages.filter((p) => p.id !== packageData.id);
@@ -1715,6 +2301,9 @@
       ) {
         const packageData = packages.find((pkg) => pkg.id === packageId);
         if (!packageData) {
+          return;
+        }
+        if (packageData.carrier === "amazon") {
           return;
         }
 
@@ -2022,6 +2611,8 @@
           submitBtn.textContent = "Add Package";
           const modalTitle = modal.querySelector("h2");
           modalTitle.textContent = "Add New Package";
+          resetAmazonImportPanel({ clearCredentials: true });
+          amazonImportPanel.classList.add("hidden");
         }
 
         modal.style.animation = "fadeIn 0.3s ease-out reverse";
@@ -2072,11 +2663,77 @@
           if (e.target.closest("#openTrackingUrlBtn")) {
             openTrackingUrl();
           }
+          if (e.target.closest("#downloadInvoiceJsonBtn")) {
+            downloadInvoiceJson();
+          }
+          if (e.target.closest("#downloadInvoicePdfBtn")) {
+            downloadInvoicePdf();
+          }
         });
 
       function openTrackingUrl() {
         if (!currentPackage || !currentPackage.trackingUrl) return;
         window.open(currentPackage.trackingUrl, "_blank");
+      }
+
+      function getInvoiceFilenameBase() {
+        if (!currentPackage) {
+          return "invoice";
+        }
+        const base =
+          currentPackage.invoice?.filename ||
+          `invoice-${currentPackage.trackingNumber || currentPackage.id}`;
+        return String(base).replace(/\.pdf$/i, "").replace(/[^a-zA-Z0-9._-]/g, "-");
+      }
+
+      function downloadInvoiceJson() {
+        if (!currentPackage?.invoice?.json) {
+          showToast("Invoice JSON is not available for this package", "error");
+          return;
+        }
+
+        const filename = `${getInvoiceFilenameBase()}.json`;
+        const blob = new Blob(
+          [JSON.stringify(currentPackage.invoice.json, null, 2)],
+          { type: "application/json" }
+        );
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      function downloadInvoicePdf() {
+        const pdfBase64 = currentPackage?.invoice?.pdfBase64;
+        if (typeof pdfBase64 !== "string" || pdfBase64.length === 0) {
+          showToast("Invoice PDF is not available for this package", "error");
+          return;
+        }
+
+        try {
+          const binary = atob(pdfBase64);
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i += 1) {
+            bytes[i] = binary.charCodeAt(i);
+          }
+
+          const blob = new Blob([bytes], { type: "application/pdf" });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = currentPackage.invoice.filename || "invoice.pdf";
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          URL.revokeObjectURL(url);
+        } catch (error) {
+          console.error("Failed to decode invoice PDF:", error);
+          showToast("Failed to download invoice PDF", "error");
+        }
       }
 
       function generateShareLink(package) {
@@ -2203,6 +2860,10 @@
           let hasUpdates = false;
 
           for (const package of packages) {
+            if (package.carrier === "amazon") {
+              updatedPackages.push(package);
+              continue;
+            }
             try {
               const trackingParams = {
                 trackingNumber: package.trackingNumber,

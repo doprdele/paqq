@@ -4,12 +4,17 @@ import {
   type Server,
   type ServerResponse,
 } from "node:http";
-import type { ShipmentInfo } from "./types.js";
+import type {
+  AmazonImportRequest,
+  AmazonImportResponse,
+  ShipmentInfo,
+} from "./types.js";
 
 export interface ScraperRouteHandlers {
   usps: (trackingNumber: string, options: { timeoutMs?: number }) => Promise<ShipmentInfo>;
   uniuni: (trackingNumber: string, options: { timeoutMs?: number }) => Promise<ShipmentInfo>;
   ups: (trackingNumber: string, options: { timeoutMs?: number }) => Promise<ShipmentInfo>;
+  amazonImport: (payload: AmazonImportRequest) => Promise<AmazonImportResponse>;
 }
 
 const TRACKING_ROUTES = new Set([
@@ -18,6 +23,7 @@ const TRACKING_ROUTES = new Set([
   "/track/uniuni",
   "/track/ups",
 ]);
+const AMAZON_IMPORT_ROUTE = "/amazon/import";
 
 function jsonResponse(
   res: ServerResponse,
@@ -96,11 +102,39 @@ function parseTrackingBody(rawBody: string): {
   };
 }
 
+function parseJsonBody<T>(rawBody: string): T {
+  if (rawBody.length === 0) {
+    return {} as T;
+  }
+  return JSON.parse(rawBody) as T;
+}
+
 export function createScraperServer(handlers: ScraperRouteHandlers): Server {
   return createServer(async (req, res) => {
     try {
       if (req.method === "GET" && req.url === "/health") {
         return jsonResponse(res, 200, { ok: true });
+      }
+
+      if (req.method === "POST" && req.url === AMAZON_IMPORT_ROUTE) {
+        const isAuthorized = ensureAuthToken(
+          req,
+          res,
+          process.env.AMAZON_SCRAPER_TOKEN,
+          "x-amazon-scraper-token"
+        );
+        if (!isAuthorized) {
+          return;
+        }
+
+        const rawBody = await readRequestBody(req);
+        const payload = parseJsonBody<AmazonImportRequest>(rawBody);
+        const result = await handlers.amazonImport(payload);
+        return jsonResponse(
+          res,
+          result.status === "totp_required" ? 202 : 200,
+          result
+        );
       }
 
       if (

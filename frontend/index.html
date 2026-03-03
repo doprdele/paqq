@@ -619,9 +619,9 @@
       </div>
     </div>
     <script>
+      const RUNTIME_CONFIG = window.__PAQQ_CONFIG__ || window.__PACKT_CONFIG__ || {};
       const API_BASE_URL =
-        window.__PAQQ_CONFIG__?.API_BASE_URL ||
-        "https://paqq.notri1.workers.dev";
+        RUNTIME_CONFIG?.API_BASE_URL || "https://paqq.notri1.workers.dev";
 
       const STORAGE_KEY = "paqq_packages";
       const ANALYTICS_PREF_KEY = "paqq_analytics_enabled";

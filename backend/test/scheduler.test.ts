@@ -357,10 +357,7 @@ describe("TrackingScheduler", () => {
   });
 
   it("calls notifications service when status changes after initial snapshot", async () => {
-    let requestCount = 0;
     const server = await createMockScraperServer((_req, res) => {
-      requestCount += 1;
-
       res.setHeader("content-type", "application/json");
       res.end(
         JSON.stringify({
@@ -369,21 +366,15 @@ describe("TrackingScheduler", () => {
             "https://tools.usps.com/go/TrackConfirmAction.action?tLabels=9400150208203004850386",
           carrier: "usps",
           status: {
-            code: requestCount === 1 ? "3" : "4",
-            description: requestCount === 1 ? "In Transit" : "Out for Delivery",
-            timestamp:
-              requestCount === 1
-                ? "2026-03-02T10:00:00.000Z"
-                : "2026-03-02T14:00:00.000Z",
+            code: "4",
+            description: "Out for Delivery",
+            timestamp: "2026-03-02T14:00:00.000Z",
           },
           events: [
             {
-              code: requestCount === 1 ? "3" : "4",
-              description: requestCount === 1 ? "In Transit" : "Out for Delivery",
-              timestamp:
-                requestCount === 1
-                  ? "2026-03-02T10:00:00.000Z"
-                  : "2026-03-02T14:00:00.000Z",
+              code: "4",
+              description: "Out for Delivery",
+              timestamp: "2026-03-02T14:00:00.000Z",
             },
           ],
         })
@@ -415,10 +406,28 @@ describe("TrackingScheduler", () => {
     cleanupTasks.push(async () => scheduler.stop());
 
     await scheduler.start();
-    await scheduler.registerTarget("usps", {
+    const params = { trackingNumber: "9400150208203004850386" };
+    await scheduler.registerTarget("usps", params);
+    await scheduler.recordSuccess("usps", params, {
       trackingNumber: "9400150208203004850386",
+      trackingUrl:
+        "https://tools.usps.com/go/TrackConfirmAction.action?tLabels=9400150208203004850386",
+      carrier: "usps",
+      status: {
+        code: "3",
+        description: "In Transit",
+        timestamp: "2026-03-02T10:00:00.000Z",
+        location: "JERSEY CITY, NJ",
+      },
+      events: [
+        {
+          code: "3",
+          description: "In Transit",
+          timestamp: "2026-03-02T10:00:00.000Z",
+          location: "JERSEY CITY, NJ",
+        },
+      ],
     });
-    await scheduler.runNow({ force: true });
     await scheduler.runNow({ force: true });
 
     expect(notifyTrackingUpdate).toHaveBeenCalledTimes(1);

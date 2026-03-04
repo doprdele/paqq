@@ -32,3 +32,8 @@ yarn-error.log*
 # Miscellaneous
 .DS_Store
 Thumbs.db
+
+# Local runtime state (can contain authenticated cookies/session data)
+.paqq-scraper-state/
+usps-scraper/.paqq-scraper-state/
+backend/.tmp-data/

@@ -27,9 +27,8 @@ if (!chromiumWithFlags.__paqqStealthApplied) {
   chromiumWithFlags.__paqqStealthApplied = true;
 }
 
-const AMAZON_SIGNIN_URL =
-  "https://www.amazon.com/ap/signin?openid.pape.max_auth_age=0&openid.return_to=https%3A%2F%2Fwww.amazon.com%2Fgp%2Fyour-account%2Forder-history";
-const AMAZON_ORDERS_URL = "https://www.amazon.com/gp/your-account/order-history";
+const AMAZON_ORDERS_URL = "https://www.amazon.com/your-orders/orders";
+const AMAZON_ORDERS_QUERY = "opt=ab&digitalOrders=0";
 const DEFAULT_TIMEOUT_MS = 60_000;
 const DEFAULT_LOOKBACK_DAYS = 30;
 const DEFAULT_MAX_SHIPMENTS = 15;
@@ -37,6 +36,17 @@ const MAX_LOOKBACK_DAYS = 365;
 const MAX_SHIPMENTS = 75;
 const MAX_ORDER_PAGES = 8;
 const TOTP_SESSION_TTL_MS = 10 * 60 * 1000;
+const AMAZON_EMAIL_SELECTORS = [
+  "#ap_email",
+  "input[name='email']",
+  "input[type='email']",
+  "input[autocomplete='email']",
+] as const;
+const AMAZON_PASSWORD_SELECTORS = [
+  "#ap_password",
+  "input[name='password']",
+  "input[type='password']",
+] as const;
 
 const DEFAULT_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
@@ -322,6 +332,10 @@ async function cleanupExpiredTotpSessions(): Promise<void> {
   }
 }
 
+async function persistAmazonSessionSnapshot(context: BrowserContext): Promise<void> {
+  await persistCarrierSessionState("amazon", context).catch(() => undefined);
+}
+
 async function hasSelector(page: Page, selector: string): Promise<boolean> {
   const locator = page.locator(selector).first();
   return (await locator.count()) > 0;
@@ -348,7 +362,10 @@ async function findFirstVisibleSelector(
 ): Promise<string | undefined> {
   for (const selector of selectors) {
     const locator = page.locator(selector).first();
-    if ((await locator.count()) > 0) {
+    if ((await locator.count()) === 0) {
+      continue;
+    }
+    if (await locator.isVisible().catch(() => false)) {
       return selector;
     }
   }
@@ -377,7 +394,7 @@ async function signInWithPassword(
   page: Page,
   config: NormalizedImportConfig
 ): Promise<{ needsTotp: boolean }> {
-  await page.goto(AMAZON_SIGNIN_URL, {
+  await page.goto(`${AMAZON_ORDERS_URL}?${AMAZON_ORDERS_QUERY}`, {
     waitUntil: "domcontentloaded",
     timeout: config.timeoutMs,
   });
@@ -392,12 +409,23 @@ async function signInWithPassword(
     return { needsTotp: false };
   }
 
-  if (await hasSelector(page, "#ap_email")) {
-    await page.locator("#ap_email").fill(config.username);
-    await clickIfPresent(page, [
+  const emailSelector = await findFirstVisibleSelector(page, [
+    ...AMAZON_EMAIL_SELECTORS,
+  ]);
+  if (emailSelector) {
+    await page.locator(emailSelector).first().fill(config.username);
+    const submittedEmail = await clickIfPresent(page, [
       "#continue",
       "input[type='submit'][aria-labelledby='continue-announce']",
+      "input[type='submit'][name='continue']",
+      "button[type='submit']",
+      "input[type='submit']",
     ]);
+    if (!submittedEmail) {
+      await page.locator(emailSelector).first().press("Enter").catch(
+        () => undefined
+      );
+    }
     await page.waitForLoadState("domcontentloaded", { timeout: config.timeoutMs });
     await page.waitForTimeout(500);
     await ensureNotBlocked(page);
@@ -411,15 +439,23 @@ async function signInWithPassword(
     }
   }
 
-  if (!(await hasSelector(page, "#ap_password"))) {
+  let passwordSelector = await findFirstVisibleSelector(page, [
+    ...AMAZON_PASSWORD_SELECTORS,
+  ]);
+  if (!passwordSelector) {
     try {
-      await page.waitForSelector("#ap_password", { timeout: config.timeoutMs });
+      await page.waitForSelector(AMAZON_PASSWORD_SELECTORS.join(", "), {
+        timeout: config.timeoutMs,
+      });
     } catch {
       // Continue with additional checks below.
     }
+    passwordSelector = await findFirstVisibleSelector(page, [
+      ...AMAZON_PASSWORD_SELECTORS,
+    ]);
   }
 
-  if (!(await hasSelector(page, "#ap_password"))) {
+  if (!passwordSelector) {
     if (await findTotpSelector(page)) {
       return { needsTotp: true };
     }
@@ -431,7 +467,7 @@ async function signInWithPassword(
     );
   }
 
-  await page.locator("#ap_password").fill(config.password);
+  await page.locator(passwordSelector).first().fill(config.password);
   await clickIfPresent(page, ["#signInSubmit", "input[type='submit']"]);
   await page.waitForLoadState("domcontentloaded", { timeout: config.timeoutMs });
   await page.waitForTimeout(700);
@@ -491,7 +527,7 @@ async function hasAuthenticatedOrdersSession(
   page: Page,
   timeoutMs: number
 ): Promise<boolean> {
-  await page.goto(`${AMAZON_ORDERS_URL}?opt=ab&digitalOrders=0`, {
+  await page.goto(`${AMAZON_ORDERS_URL}?${AMAZON_ORDERS_QUERY}`, {
     waitUntil: "domcontentloaded",
     timeout: timeoutMs,
   });
@@ -518,7 +554,7 @@ async function collectOrderLinks(
 ): Promise<AmazonOrderLink[]> {
   const results: AmazonOrderLink[] = [];
   const seen = new Set<string>();
-  let nextPageUrl: string | undefined = `${AMAZON_ORDERS_URL}?opt=ab&digitalOrders=0`;
+  let nextPageUrl: string | undefined = `${AMAZON_ORDERS_URL}?${AMAZON_ORDERS_QUERY}`;
 
   for (
     let pageIndex = 0;
@@ -532,15 +568,6 @@ async function collectOrderLinks(
     await page.waitForTimeout(700);
 
     const extracted = await page.evaluate(() => {
-      const toAbsolute = (href: string | null): string | undefined => {
-        if (!href) return undefined;
-        try {
-          return new URL(href, window.location.origin).toString();
-        } catch {
-          return undefined;
-        }
-      };
-
       const cards = Array.from(
         document.querySelectorAll(
           "[data-order-id], .order, .order-card, .a-box-group, div.yohtmlc-order-level-card"
@@ -553,41 +580,55 @@ async function collectOrderLinks(
         orderDateText?: string;
       }> = [];
 
-      const pushFromRoot = (root: Element): void => {
-        const text = (root.textContent ?? "").replace(/\s+/g, " ").trim();
-        const orderId = text.match(/\d{3}-\d{7}-\d{7}/)?.[0];
-        const dateMatch = text.match(
-          /(?:ordered on|order placed)\s*([A-Za-z]+\s+\d{1,2},\s+\d{4})/i
-        );
-        const detailAnchor = Array.from(root.querySelectorAll("a[href]")).find(
-          (anchor) => {
-            const href = anchor.getAttribute("href") ?? "";
-            return (
-              href.includes("order-details") ||
-              href.includes("orderID=") ||
-              href.includes("order-history")
-            );
-          }
-        ) as HTMLAnchorElement | undefined;
-        const detailUrl = toAbsolute(detailAnchor?.getAttribute("href") ?? null);
-        if (!detailUrl) {
-          return;
-        }
-        links.push({
-          detailUrl,
-          orderId,
-          orderDateText: dateMatch?.[1],
-        });
-      };
-
       if (cards.length > 0) {
-        cards.forEach(pushFromRoot);
+        for (const root of cards) {
+          const text = (root.textContent ?? "").replace(/\s+/g, " ").trim();
+          const orderId = text.match(/\d{3}-\d{7}-\d{7}/)?.[0];
+          const dateMatch = text.match(
+            /(?:ordered on|order placed)\s*([A-Za-z]+\s+\d{1,2},\s+\d{4})/i
+          );
+          const detailAnchor = Array.from(root.querySelectorAll("a[href]")).find(
+            (anchor) => {
+              const href = anchor.getAttribute("href") ?? "";
+              return (
+                href.includes("order-details") ||
+                href.includes("orderID=") ||
+                href.includes("order-history")
+              );
+            }
+          ) as HTMLAnchorElement | undefined;
+          const detailHref = detailAnchor?.getAttribute("href");
+          let detailUrl: string | undefined;
+          if (detailHref) {
+            try {
+              detailUrl = new URL(detailHref, window.location.origin).toString();
+            } catch {
+              detailUrl = undefined;
+            }
+          }
+          if (!detailUrl) {
+            continue;
+          }
+          links.push({
+            detailUrl,
+            orderId,
+            orderDateText: dateMatch?.[1],
+          });
+        }
       } else {
         const fallbackLinks = Array.from(
           document.querySelectorAll("a[href*='order-details'], a[href*='orderID=']")
         );
         for (const anchor of fallbackLinks) {
-          const detailUrl = toAbsolute(anchor.getAttribute("href"));
+          const href = anchor.getAttribute("href");
+          let detailUrl: string | undefined;
+          if (href) {
+            try {
+              detailUrl = new URL(href, window.location.origin).toString();
+            } catch {
+              detailUrl = undefined;
+            }
+          }
           if (detailUrl) {
             links.push({ detailUrl });
           }
@@ -605,9 +646,19 @@ async function collectOrderLinks(
         }
       ) as HTMLAnchorElement | undefined;
 
+      const nextHref = nextAnchor?.getAttribute("href");
+      let nextPageUrl: string | undefined;
+      if (nextHref) {
+        try {
+          nextPageUrl = new URL(nextHref, window.location.origin).toString();
+        } catch {
+          nextPageUrl = undefined;
+        }
+      }
+
       return {
         links,
-        nextPageUrl: toAbsolute(nextAnchor?.getAttribute("href") ?? null),
+        nextPageUrl,
       };
     });
 
@@ -657,15 +708,6 @@ async function extractOrderShipments(
     const dateMatch = pageText.match(
       /(?:ordered on|order placed)\s*([A-Za-z]+\s+\d{1,2},\s+\d{4})/i
     );
-
-    const toAbsolute = (href: string | null): string | undefined => {
-      if (!href) return undefined;
-      try {
-        return new URL(href, window.location.origin).toString();
-      } catch {
-        return undefined;
-      }
-    };
 
     const itemTitles = Array.from(
       document.querySelectorAll(
@@ -728,6 +770,26 @@ async function extractOrderShipments(
         (root as HTMLElement).dataset?.shipmentId ||
         `${orderIdFromText ?? "order"}-${index + 1}`;
 
+      const trackingHref = trackingAnchor?.getAttribute("href");
+      let trackingUrl: string | undefined;
+      if (trackingHref) {
+        try {
+          trackingUrl = new URL(trackingHref, window.location.origin).toString();
+        } catch {
+          trackingUrl = undefined;
+        }
+      }
+
+      const invoiceHref = invoiceAnchor?.getAttribute("href");
+      let invoiceUrl: string | undefined;
+      if (invoiceHref) {
+        try {
+          invoiceUrl = new URL(invoiceHref, window.location.origin).toString();
+        } catch {
+          invoiceUrl = undefined;
+        }
+      }
+
       const eventNodes = Array.from(
         root.querySelectorAll("li, .a-list-item, [data-event], .track-event")
       ).slice(0, 6);
@@ -762,8 +824,8 @@ async function extractOrderShipments(
           timestamp: timestampMatch?.[1],
         },
         trackingNumber: trackingMatch?.[1],
-        trackingUrl: toAbsolute(trackingAnchor?.getAttribute("href") ?? null),
-        invoiceUrl: toAbsolute(invoiceAnchor?.getAttribute("href") ?? null),
+        trackingUrl,
+        invoiceUrl,
         estimatedDelivery: rootText.match(
           /(?:arriving|delivery date|expected by)\s*([A-Za-z]+\s+\d{1,2}(?:,\s+\d{4})?)/i
         )?.[1],
@@ -977,6 +1039,7 @@ export async function importAmazonShipments(
 
     try {
       await submitTotp(pending.page, pending.config, payload.totpCode ?? "");
+      await persistAmazonSessionSnapshot(pending.session.context);
       const result = await completeImport(
         pending.page,
         pending.session.context,
@@ -1003,6 +1066,9 @@ export async function importAmazonShipments(
       page,
       config.timeoutMs
     );
+    if (alreadyAuthenticated) {
+      await persistAmazonSessionSnapshot(session.context);
+    }
 
     if (!alreadyAuthenticated) {
       const loginResult = await signInWithPassword(page, config);
@@ -1023,6 +1089,7 @@ export async function importAmazonShipments(
           expiresAt: new Date(expiresAt).toISOString(),
         };
       }
+      await persistAmazonSessionSnapshot(session.context);
     }
 
     const result = await completeImport(page, session.context, config);

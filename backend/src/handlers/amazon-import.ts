@@ -118,8 +118,46 @@ function withEnvDefaults(
   return merged;
 }
 
+function decodePercentEscapes(value: string): string {
+  if (!/%[0-9a-f]{2}/i.test(value)) {
+    return value;
+  }
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function extractTotpSecret(rawValue: string): string {
+  const value = rawValue.trim();
+  if (!value) {
+    throw new Error("TOTP key is empty");
+  }
+
+  if (value.toLowerCase().startsWith("otpauth://")) {
+    let parsed: URL;
+    try {
+      parsed = new URL(value);
+    } catch {
+      throw new Error(
+        "TOTP key must be a valid Base32 string (A-Z and 2-7), or an otpauth:// URI."
+      );
+    }
+    const secret = normalizeString(parsed.searchParams.get("secret"));
+    if (!secret) {
+      throw new Error(
+        "otpauth URI is missing the required secret query parameter."
+      );
+    }
+    return decodePercentEscapes(secret);
+  }
+
+  return decodePercentEscapes(value);
+}
+
 function decodeBase32Secret(secret: string): Uint8Array {
-  const normalized = secret
+  const normalized = extractTotpSecret(secret)
     .toUpperCase()
     .replace(/[\s-]/g, "")
     .replace(/=+$/g, "");
@@ -136,7 +174,7 @@ function decodeBase32Secret(secret: string): Uint8Array {
     const index = alphabet.indexOf(char);
     if (index === -1) {
       throw new Error(
-        "TOTP key must be a valid Base32 string (A-Z and 2-7)."
+        "TOTP key must be a valid Base32 string (A-Z and 2-7), or an otpauth:// URI."
       );
     }
 

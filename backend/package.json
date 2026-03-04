@@ -5,8 +5,9 @@
   "main": "dist/node.js",
   "scripts": {
     "build": "bunx --bun tsc",
+    "build:node": "tsc -p tsconfig.json",
     "start": "bun run start:node",
-    "start:node": "bun src/node.ts",
+    "start:node": "sh -c \"if command -v bun >/dev/null 2>&1; then bun src/node.ts; else npm run build:node && node dist/node.js; fi\"",
     "test": "bunx --bun vitest run",
     "test:integration": "bunx --bun vitest run test/usps.integration.test.ts test/uniuni.integration.test.ts test/ups.integration.test.ts test/amazon.import.integration.test.ts",
     "test:live:uniuni": "RUN_LIVE_UNIUNI_BACKEND_TESTS=1 bunx --bun vitest run test/live.uniuni.integration.test.ts",

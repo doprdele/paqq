@@ -160,12 +160,15 @@ Current defaults in that stack are already aligned to Paqq:
 
 ## Local Development (Non-Docker)
 
+- Backend + frontend checks use **Bun**.
+- Scraper currently uses **Node.js + npm**.
+
 ### Backend
 
 ```bash
 cd backend
-npm install
-npm run start:node
+bun install
+bun run start:node
 ```
 
 ### Fetch-Compatible Edge Wrapper
@@ -191,16 +194,24 @@ npm run start
 
 Serve `frontend/` with any static server and point runtime config at your backend.
 
+For frontend static checks:
+
+```bash
+cd frontend
+bun install
+bun run test
+```
+
 ## Tests
 
 ### Backend tests
 
 ```bash
 cd backend
-npm test
-npm run test:integration
-npm run test:live:uniuni
-npm run test:live:ups
+bun run test
+bun run test:integration
+bun run test:live:uniuni
+bun run test:live:ups
 ```
 
 ### Scraper tests
@@ -218,13 +229,14 @@ npm run test:live:all
 
 - CI workflow: `.github/workflows/ci.yml`
   - Runs on pull requests and pushes to `main`
-  - Executes backend build/tests, scraper build/tests, and frontend static script checks
+  - Executes Bun-based backend build/tests, Node/npm-based scraper build/tests, and Bun-based frontend static checks
 
 - Release workflow: `.github/workflows/release-calver.yml`
   - Runs after successful `CI` on `main` pushes
   - Uses date-based CalVer (`YYYY.M.D`, with `-rN` when multiple releases happen the same day)
   - Automatically updates package versions in:
-    - `backend/package.json` + `backend/package-lock.json`
+    - `backend/package.json`
+    - `frontend/package.json`
     - `usps-scraper/package.json` + `usps-scraper/package-lock.json`
   - Commits the version update, tags (`v<version>`), and publishes a GitHub Release
 

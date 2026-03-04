@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   backend:
-    name: Backend Build/Test
+    name: Backend Build/Test (Bun)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -21,21 +21,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: backend/package-lock.json
+          bun-version: 1.3.10
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Build
-        run: npm run build
+        run: bun run build
 
       - name: Test
-        run: npm test
+        run: bun run test
 
   scraper:
     name: Scraper Build/Test
@@ -64,21 +62,22 @@ jobs:
         run: npm test
 
   frontend:
-    name: Frontend Static Checks
+    name: Frontend Static Checks (Bun)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: 24
+          bun-version: 1.3.10
 
-      - name: Validate inline scripts
-        run: |
-          node -e "const fs=require('fs');const html=fs.readFileSync('frontend/index.html','utf8');const re=/<script>([\\s\\S]*?)<\\/script>/g;let m,count=0;while((m=re.exec(html))){count++;new Function(m[1]);}console.log('validated inline scripts:',count);"
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
-      - name: Validate service worker script
-        run: |
-          node -e "const fs=require('fs');new Function(fs.readFileSync('frontend/sw.js','utf8'));console.log('validated sw.js');"
+      - name: Run frontend static checks
+        run: bun run test

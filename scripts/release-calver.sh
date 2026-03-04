@@ -40,11 +40,16 @@ if (( print_only == 1 )); then
   exit 0
 fi
 
-for package_dir in backend usps-scraper; do
+for package_dir in backend frontend; do
   (
     cd "$package_dir"
-    npm version "$version" --no-git-tag-version
+    bun pm pkg set "version=${version}"
   )
 done
+
+(
+  cd usps-scraper
+  npm version "$version" --no-git-tag-version
+)
 
 printf '%s\n' "$version"

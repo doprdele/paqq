@@ -1,12 +1,12 @@
-FROM node:22-alpine
+FROM oven/bun:1.3.10-alpine
 
 WORKDIR /app
 
 RUN apk add --no-cache python3 py3-pip && \
     pip3 install --no-cache-dir "apprise>=1.9.0,<2"
 
-COPY package*.json ./
-RUN npm ci
+COPY package.json bun.lock ./
+RUN bun install --frozen-lockfile
 
 COPY tsconfig.json ./
 COPY src ./src
@@ -17,4 +17,4 @@ ENV HOST=0.0.0.0
 
 EXPOSE 8787
 
-CMD ["npm", "run", "start:node"]
+CMD ["bun", "run", "start:node"]

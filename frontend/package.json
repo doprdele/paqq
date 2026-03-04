@@ -1,4 +1,12 @@
 {
+  "name": "paqq-frontend",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "check:inline": "bun scripts/check-static.mjs inline",
+    "check:sw": "bun scripts/check-static.mjs sw",
+    "test": "bun scripts/check-static.mjs all"
+  },
   "dependencies": {},
   "devDependencies": {
     "tailwindcss": "^3.4.17"

@@ -1085,7 +1085,7 @@ video {
 }
 
 .font-montserrat {
-  font-family: Montserrat, sans-serif;
+  font-family: "0xProto Nerd Font Mono", "0xProto Nerd Font", "Cascadia Mono", "Fira Code", "JetBrains Mono", monospace;
 }
 
 .text-2xl {

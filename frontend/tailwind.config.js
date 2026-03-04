@@ -21,7 +21,7 @@ module.exports = {
         black: "#444444",
       },
       fontFamily: {
-        montserrat: ["Montserrat", "sans-serif"],
+        montserrat: ["0xProto Nerd Font Mono", "0xProto Nerd Font", "Cascadia Mono", "Fira Code", "JetBrains Mono", "monospace"],
       },
     },
   }

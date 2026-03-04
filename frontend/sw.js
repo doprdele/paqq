@@ -1,12 +1,13 @@
-const CACHE_NAME = 'paqq-v2';
+const CACHE_NAME = 'paqq-v3';
+const IMAGE_CACHE_NAME = 'paqq-images-v1';
 const urlsToCache = [
   '/',
   'index.html',
   'manifest.json',
   'logo.svg',
+  'amazon-logo.svg',
   'icons/favicon.png',
   'styles.css',
-  'https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css',
   'default-logo.png'
 ];
@@ -21,6 +22,30 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') {
+    return;
+  }
+
+  if (event.request.destination === 'image') {
+    event.respondWith(
+      caches.open(IMAGE_CACHE_NAME).then(async (imageCache) => {
+        const cached = await imageCache.match(event.request);
+        const networkFetch = fetch(event.request)
+          .then((response) => {
+            if (response && (response.ok || response.type === 'opaque')) {
+              imageCache.put(event.request, response.clone());
+            }
+            return response;
+          })
+          .catch(() => undefined);
+
+        if (cached) {
+          event.waitUntil(networkFetch);
+          return cached;
+        }
+        const fresh = await networkFetch;
+        return fresh || cached || Response.error();
+      })
+    );
     return;
   }
 
@@ -82,7 +107,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
+          if (cacheName !== CACHE_NAME && cacheName !== IMAGE_CACHE_NAME) {
             return caches.delete(cacheName);
           }
         })

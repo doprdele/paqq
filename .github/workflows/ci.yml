@@ -35,6 +35,27 @@ jobs:
       - name: Test
         run: bun run test
 
+  backend-carriers:
+    name: Backend Carrier Integration (Non-Amazon)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.10
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run carrier integration tests
+        run: bun run test:integration:carriers
+
   scraper:
     name: Scraper Build/Test
     runs-on: ubuntu-latest
@@ -60,6 +81,32 @@ jobs:
 
       - name: Test
         run: npm test
+
+  scraper-carriers:
+    name: Scraper Carrier Spec/Integration (Non-Amazon)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: usps-scraper
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: usps-scraper/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run carrier spec tests
+        run: npm run test:spec:carriers
+
+      - name: Run carrier integration tests
+        run: npm run test:integration:carriers
 
   frontend:
     name: Frontend Static Checks (Bun)

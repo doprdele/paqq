@@ -40,6 +40,7 @@ export interface AmazonImportedShipment extends ShipmentInfo {
   orderId: string;
   shipmentId: string;
   delivered: boolean;
+  productImages?: string[];
   invoice: AmazonInvoicePayload;
 }
 

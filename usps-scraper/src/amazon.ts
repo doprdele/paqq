@@ -116,6 +116,7 @@ interface AmazonRawShipment {
   delivered: boolean;
   events: Array<AmazonRawStatus>;
   itemTitles: string[];
+  itemImageUrls: string[];
   invoiceUrl?: string;
   sourceUrl: string;
 }
@@ -757,30 +758,161 @@ async function extractOrderShipments(
 
   const sourceUrl = page.url();
   const extracted = await page.evaluate(() => {
-    const pageText = (document.body?.textContent ?? "").replace(/\s+/g, " ").trim();
+    const normalizeSpace = (value: string | undefined | null): string =>
+      String(value ?? "")
+        .replace(/\u00a0/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    const cleanNodeText = (node: Element | null | undefined): string => {
+      if (!node) {
+        return "";
+      }
+      const clone = node.cloneNode(true) as Element;
+      clone
+        .querySelectorAll("script, style, noscript, template")
+        .forEach((entry) => entry.remove());
+      return normalizeSpace(clone.textContent);
+    };
+    const trackingDatePattern =
+      /([A-Za-z]+\s+\d{1,2},\s+\d{4}(?:\s+\d{1,2}:\d{2}\s*[AP]M)?)/;
+    const statusHintPattern =
+      /\b(delivered|arriving|arrive|shipped|shipping|in transit|out for delivery|on the way|running late|delayed|left at|picked up|attempted)\b/i;
+    const noisePattern =
+      /\b(payment method|order summary|subtotal|shipping & handling|estimated tax|grand total|visa ending|transactions)\b/i;
+    const codeLikePattern =
+      /(function\s*\(|\.apply\(|\.call\(|for\s*\(var|[{}][^a-zA-Z0-9]*[{}]|===|&&|\|\|)/;
+    const isLikelyNoiseText = (value: string): boolean => {
+      if (!value) {
+        return true;
+      }
+      if (value.length > 220) {
+        return true;
+      }
+      if (noisePattern.test(value) || codeLikePattern.test(value)) {
+        return true;
+      }
+      const symbolCount = (value.match(/[{}();=<>]/g) ?? []).length;
+      return symbolCount >= 8;
+    };
+    const isLikelyTrackingText = (value: string): boolean =>
+      statusHintPattern.test(value) && !isLikelyNoiseText(value);
+    const dedupe = (values: string[], max = 10): string[] => {
+      const seen = new Set<string>();
+      const result: string[] = [];
+      for (const value of values) {
+        if (!value || seen.has(value)) {
+          continue;
+        }
+        seen.add(value);
+        result.push(value);
+        if (result.length >= max) {
+          break;
+        }
+      }
+      return result;
+    };
+    const isLikelyProductImageUrl = (value: string): boolean => {
+      let parsed: URL;
+      try {
+        parsed = new URL(value, window.location.origin);
+      } catch {
+        return false;
+      }
+      if (!["http:", "https:"].includes(parsed.protocol)) {
+        return false;
+      }
+      const href = parsed.toString();
+      const host = parsed.hostname.toLowerCase();
+      if (
+        !host.includes("media-amazon.com") &&
+        !host.includes("images-amazon.com") &&
+        !host.includes("ssl-images-amazon.com")
+      ) {
+        return false;
+      }
+      if (
+        /(sprite|icon|logo|spinner|placeholder|transparent|pixel|amazonui|nav)/i.test(
+          href
+        )
+      ) {
+        return false;
+      }
+      return true;
+    };
+    const collectImageUrls = (scope: ParentNode): string[] => {
+      const urls: string[] = [];
+      const images = Array.from(scope.querySelectorAll("img"));
+      for (const image of images) {
+        const candidates: string[] = [];
+        candidates.push(normalizeSpace(image.getAttribute("src")));
+        candidates.push(normalizeSpace(image.getAttribute("data-old-hires")));
+        candidates.push(normalizeSpace(image.getAttribute("data-src")));
+        candidates.push(normalizeSpace(image.currentSrc));
+        const dynamicImage = normalizeSpace(image.getAttribute("data-a-dynamic-image"));
+        if (dynamicImage) {
+          try {
+            const parsed = JSON.parse(dynamicImage) as Record<string, unknown>;
+            candidates.push(...Object.keys(parsed));
+          } catch {
+            // Ignore invalid dynamic-image payloads.
+          }
+        }
+
+        for (const candidate of candidates) {
+          if (!candidate) {
+            continue;
+          }
+          let resolved: string;
+          try {
+            resolved = new URL(candidate, window.location.origin).toString();
+          } catch {
+            continue;
+          }
+          if (!isLikelyProductImageUrl(resolved)) {
+            continue;
+          }
+          urls.push(resolved);
+        }
+      }
+      return dedupe(urls, 12);
+    };
+
+    const pageText = cleanNodeText(document.body);
     const orderIdFromText = pageText.match(/\d{3}-\d{7}-\d{7}/)?.[0];
     const dateMatch = pageText.match(
       /(?:ordered on|order placed)\s*([A-Za-z]+\s+\d{1,2},\s+\d{4})/i
     );
 
-    const itemTitles = Array.from(
-      document.querySelectorAll(
-        ".yohtmlc-product-title, [data-item-title], .a-truncate-cut, .a-size-base-plus"
+    const itemTitles = dedupe(
+      Array.from(
+        document.querySelectorAll(
+          ".yohtmlc-product-title, [data-item-title], .a-truncate-cut, .a-size-base-plus, [class*='product-title']"
+        )
       )
-    )
-      .map((entry) => (entry.textContent ?? "").replace(/\s+/g, " ").trim())
-      .filter((entry) => entry.length > 0)
-      .slice(0, 10);
+        .map((entry) => normalizeSpace(entry.textContent))
+        .filter((entry) => entry.length > 0 && !isLikelyNoiseText(entry)),
+      10
+    );
+    const itemImageUrls = collectImageUrls(document);
 
     const shipmentRoots = Array.from(
       document.querySelectorAll(
-        "[data-shipment-id], .shipment, .track-package-container, div.a-box-group"
+        "[data-shipment-id], .shipment, .track-package-container, [class*='shipment-card'], [class*='track-package']"
       )
-    );
+    ).filter((root) => {
+      const text = cleanNodeText(root).toLowerCase();
+      return (
+        text.includes("track") ||
+        text.includes("delivery") ||
+        text.includes("shipment") ||
+        text.includes("arriving")
+      );
+    });
     const roots = shipmentRoots.length > 0 ? shipmentRoots : [document.body];
 
     const shipments = roots.map((root, index) => {
-      const rootText = (root.textContent ?? "").replace(/\s+/g, " ").trim();
+      const rootText = cleanNodeText(root);
+      const rootTextLower = rootText.toLowerCase();
       const trackingAnchor = Array.from(root.querySelectorAll("a[href]")).find(
         (anchor) => {
           const text = (anchor.textContent ?? "").toLowerCase();
@@ -806,19 +938,29 @@ async function extractOrderShipments(
         }
       ) as HTMLAnchorElement | undefined;
 
-      const statusText =
-        (root.querySelector(
-          ".yohtmlc-shipment-status, [data-shipment-status], .a-color-success, .a-color-state"
-        )?.textContent ?? rootText)
-          .replace(/\s+/g, " ")
-          .trim() || "Tracking update available";
-      const delivered = /delivered/i.test(statusText) || /delivered/i.test(rootText);
-
-      const timestampMatch = rootText.match(
-        /([A-Za-z]+\s+\d{1,2},\s+\d{4}(?:\s+\d{1,2}:\d{2}\s*[AP]M)?)/
+      const statusCandidates = dedupe(
+        [
+          ...Array.from(
+            root.querySelectorAll(
+              ".yohtmlc-shipment-status, [data-shipment-status], [class*='shipment-status'], [class*='delivery-status'], .a-color-success, .a-color-state"
+            )
+          ).map((entry) => normalizeSpace(entry.textContent)),
+          ...Array.from(root.querySelectorAll("h1, h2, h3, [role='heading']")).map(
+            (entry) => normalizeSpace(entry.textContent)
+          ),
+        ].filter((entry) => entry.length > 0),
+        8
       );
+      const statusText =
+        statusCandidates.find((entry) => isLikelyTrackingText(entry)) ??
+        statusCandidates.find((entry) => !isLikelyNoiseText(entry)) ??
+        "Tracking update available";
+      const delivered =
+        /delivered/i.test(statusText) || /delivered/i.test(rootTextLower);
+
+      const timestampMatch = rootText.match(trackingDatePattern);
       const trackingMatch = rootText.match(
-        /\b(1Z[0-9A-Z]{16}|9[0-9]{20,30}|TBA[0-9A-Z]+|[A-Z]{2}[0-9]{9}[A-Z]{2}|[A-Z0-9]{10,30})\b/
+        /\b(1Z[0-9A-Z]{16}|9[0-9]{20,30}|TBA[0-9A-Z]+|[A-Z]{2}[0-9]{9}[A-Z]{2}|(?=[A-Z0-9]{10,30}\b)(?=[A-Z0-9]*\d)[A-Z0-9]{10,30})\b/
       );
       const shipmentId =
         (root as HTMLElement).dataset?.shipmentId ||
@@ -845,21 +987,30 @@ async function extractOrderShipments(
       }
 
       const eventNodes = Array.from(
-        root.querySelectorAll("li, .a-list-item, [data-event], .track-event")
-      ).slice(0, 6);
+        root.querySelectorAll(
+          "[data-event], [class*='track-event'], [class*='shipment-event'], [class*='timeline'] li, .a-ordered-list li, ul li"
+        )
+      ).slice(0, 40);
       const events: Array<{ description: string; timestamp?: string }> = [];
       for (const eventNode of eventNodes) {
-        const text = (eventNode.textContent ?? "").replace(/\s+/g, " ").trim();
-        if (!text) {
+        const text = normalizeSpace(eventNode.textContent);
+        if (!text || isLikelyNoiseText(text)) {
           continue;
         }
-        const dateText = text.match(
-          /([A-Za-z]+\s+\d{1,2},\s+\d{4}(?:\s+\d{1,2}:\d{2}\s*[AP]M)?)/
-        )?.[1];
+        if (!isLikelyTrackingText(text) && !trackingDatePattern.test(text)) {
+          continue;
+        }
+        if (events.some((entry) => entry.description === text)) {
+          continue;
+        }
+        const dateText = text.match(trackingDatePattern)?.[1];
         events.push({
           description: text,
           timestamp: dateText,
         });
+        if (events.length >= 8) {
+          break;
+        }
       }
 
       if (events.length === 0) {
@@ -868,6 +1019,18 @@ async function extractOrderShipments(
           timestamp: timestampMatch?.[1],
         });
       }
+
+      const shipmentItemTitles = dedupe(
+        Array.from(
+          root.querySelectorAll(
+            ".yohtmlc-product-title, [data-item-title], .a-truncate-cut, .a-size-base-plus, [class*='product-title']"
+          )
+        )
+          .map((entry) => normalizeSpace(entry.textContent))
+          .filter((entry) => entry.length > 0 && !isLikelyNoiseText(entry)),
+        10
+      );
+      const shipmentItemImageUrls = collectImageUrls(root);
 
       return {
         shipmentId,
@@ -886,6 +1049,8 @@ async function extractOrderShipments(
         carrierHint: rootText,
         delivered,
         events,
+        itemTitles: shipmentItemTitles,
+        itemImageUrls: shipmentItemImageUrls,
       };
     });
 
@@ -894,6 +1059,7 @@ async function extractOrderShipments(
       orderId: orderIdFromText,
       orderDateText: dateMatch?.[1],
       itemTitles,
+      itemImageUrls,
       shipments,
     };
   });
@@ -905,9 +1071,15 @@ async function extractOrderShipments(
       shipment.orderDateText ?? extracted.orderDateText ?? orderLink.orderDateText,
     sourceUrl,
     itemTitles:
-      extracted.itemTitles.length > 0
+      shipment.itemTitles.length > 0
+        ? shipment.itemTitles
+        : extracted.itemTitles.length > 0
         ? extracted.itemTitles
         : ["Amazon order item"],
+    itemImageUrls:
+      shipment.itemImageUrls.length > 0
+        ? shipment.itemImageUrls
+        : extracted.itemImageUrls,
   }));
 }
 
@@ -1026,6 +1198,7 @@ async function scrapeShipments(
         orderId,
         shipmentId,
         delivered: raw.delivered,
+        productImages: raw.itemImageUrls,
         trackingNumber,
         trackingUrl,
         carrier,
@@ -1051,6 +1224,7 @@ async function scrapeShipments(
             trackingUrl,
             carrier,
             items: raw.itemTitles,
+            itemImageUrls: raw.itemImageUrls,
             invoiceUrl,
             importedAt: nowIso,
           },

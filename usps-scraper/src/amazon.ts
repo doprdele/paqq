@@ -412,6 +412,14 @@ async function signInWithPassword(
   }
 
   if (!(await hasSelector(page, "#ap_password"))) {
+    try {
+      await page.waitForSelector("#ap_password", { timeout: config.timeoutMs });
+    } catch {
+      // Continue with additional checks below.
+    }
+  }
+
+  if (!(await hasSelector(page, "#ap_password"))) {
     if (await findTotpSelector(page)) {
       return { needsTotp: true };
     }

@@ -1,0 +1,69 @@
+name: Release (CalVer)
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: |
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      !startsWith(github.event.workflow_run.head_commit.message, 'chore(release):')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Compute next CalVer and bump package versions
+        id: bump
+        run: |
+          git fetch --tags origin
+          version="$(./scripts/release-calver.sh)"
+          tag="v${version}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Commit release version changes
+        run: |
+          git add backend/package.json backend/package-lock.json usps-scraper/package.json usps-scraper/package-lock.json
+          git commit -m "chore(release): ${{ steps.bump.outputs.version }} [skip ci]"
+
+      - name: Create git tag
+        run: |
+          git tag "${{ steps.bump.outputs.tag }}"
+
+      - name: Push release commit and tag
+        run: |
+          git push origin main
+          git push origin "${{ steps.bump.outputs.tag }}"
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.bump.outputs.tag }}
+          generate_release_notes: true

@@ -203,6 +203,20 @@ npm run test:live:uniuni
 npm run test:live:all
 ```
 
+## GitHub CI / Releases
+
+- CI workflow: `.github/workflows/ci.yml`
+  - Runs on pull requests and pushes to `main`
+  - Executes backend build/tests, scraper build/tests, and frontend static script checks
+
+- Release workflow: `.github/workflows/release-calver.yml`
+  - Runs after successful `CI` on `main` pushes
+  - Uses date-based CalVer (`YYYY.M.D`, with `-rN` when multiple releases happen the same day)
+  - Automatically updates package versions in:
+    - `backend/package.json` + `backend/package-lock.json`
+    - `usps-scraper/package.json` + `usps-scraper/package-lock.json`
+  - Commits the version update, tags (`v<version>`), and publishes a GitHub Release
+
 ## API
 
 ### `GET /api/list`

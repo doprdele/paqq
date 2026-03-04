@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend Build/Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+  scraper:
+    name: Scraper Build/Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: usps-scraper
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: usps-scraper/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+  frontend:
+    name: Frontend Static Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Validate inline scripts
+        run: |
+          node -e "const fs=require('fs');const html=fs.readFileSync('frontend/index.html','utf8');const re=/<script>([\\s\\S]*?)<\\/script>/g;let m,count=0;while((m=re.exec(html))){count++;new Function(m[1]);}console.log('validated inline scripts:',count);"
+
+      - name: Validate service worker script
+        run: |
+          node -e "const fs=require('fs');new Function(fs.readFileSync('frontend/sw.js','utf8'));console.log('validated sw.js');"

@@ -33,7 +33,10 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const targetSha = process.env.TARGET_SHA;
-            const workflowName = 'pages build and deployment';
+            const workflowNameCandidates = new Set([
+              'pages-build-deployment',
+              'pages build and deployment'
+            ]);
             const timeoutMs = 20 * 60 * 1000;
             const pollMs = 15 * 1000;
             const startedAt = Date.now();
@@ -49,7 +52,9 @@ jobs:
                 per_page: 100
               });
               const pagesWorkflow = workflows.find(
-                (w) => (w.name || '').toLowerCase() === workflowName
+                (w) =>
+                  workflowNameCandidates.has((w.name || '').toLowerCase()) ||
+                  ((w.path || '').toLowerCase().includes('pages-build-deployment'))
               );
 
               if (!pagesWorkflow) {
@@ -62,7 +67,6 @@ jobs:
                 repo,
                 workflow_id: pagesWorkflow.id,
                 head_sha: targetSha,
-                event: 'push',
                 per_page: 100
               });
               const run = runs[0];

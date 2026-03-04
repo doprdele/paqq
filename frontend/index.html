@@ -642,7 +642,7 @@
     <script>
       const RUNTIME_CONFIG = window.__PAQQ_CONFIG__ || window.__PACKT_CONFIG__ || {};
       const API_BASE_URL =
-        RUNTIME_CONFIG?.API_BASE_URL || "https://paqq.notri1.workers.dev";
+        RUNTIME_CONFIG?.API_BASE_URL || window.location.origin;
 
       const STORAGE_KEY = "paqq_packages";
       const ANALYTICS_PREF_KEY = "paqq_analytics_enabled";

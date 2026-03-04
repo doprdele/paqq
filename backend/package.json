@@ -1,21 +1,18 @@
 {
   "name": "paqq-backend",
   "version": "0.0.1",
-  "description": "Paqq backend using cf workers.",
+  "description": "Paqq backend API and scheduler.",
   "main": "src/index.ts",
   "scripts": {
     "build": "tsc",
-    "start": "wrangler dev",
-    "start:worker": "wrangler dev",
+    "start": "npm run start:node",
     "start:node": "tsx src/node.ts",
-    "deploy": "wrangler publish",
     "test": "vitest run",
     "test:integration": "vitest run test/usps.integration.test.ts test/uniuni.integration.test.ts test/ups.integration.test.ts test/amazon.import.integration.test.ts",
     "test:live:uniuni": "RUN_LIVE_UNIUNI_BACKEND_TESTS=1 vitest run test/live.uniuni.integration.test.ts",
     "test:live:ups": "RUN_LIVE_UPS_BACKEND_TESTS=1 vitest run test/live.ups.integration.test.ts"
   },
   "dependencies": {
-    "@cloudflare/workers-types": "^1.0.0",
     "ajv": "^8.17.1",
     "typescript": "^4.5.4"
   },

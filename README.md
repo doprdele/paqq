@@ -60,8 +60,8 @@
 
 - `frontend/`: static web app (nginx in self-hosted stack)
 - `backend/`: API + scheduler
-  - Worker adapter (`src/index.ts`)
   - Node adapter (`src/node.ts`)
+  - Runtime-agnostic fetch adapter (`src/fetch-adapter.ts`) for edge/serverless wrappers
 - `usps-scraper/`: Playwright-based scraper service for USPS/UniUni/UPS + Amazon import
 
 ## Self-Hosted: Quick Start (Docker Compose)
@@ -166,6 +166,17 @@ Current defaults in that stack are already aligned to Paqq:
 cd backend
 npm install
 npm run start:node
+```
+
+### Fetch-Compatible Edge Wrapper
+
+For fetch-compatible edge/serverless runtimes, wrap backend with the runtime-agnostic adapter:
+
+```ts
+import { createFetchRuntimeAdapter } from "./dist/fetch-adapter.js";
+
+const app = createFetchRuntimeAdapter(process.env as Record<string, string | undefined>);
+export default app;
 ```
 
 ### Scraper

@@ -9,7 +9,7 @@ import {
   type PaqqSettings,
 } from './settings-schema';
 
-interface RequestServices {
+export interface RequestServices {
   scheduler?: TrackingScheduler;
   settings?: {
     getSettings: () => Promise<PaqqSettings>;
